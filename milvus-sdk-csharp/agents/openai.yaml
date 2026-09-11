@@ -1,0 +1,7 @@
+interface:
+  display_name: "Milvus C# SDK"
+  short_description: "Develop, test, trace, and release the C# SDK"
+  default_prompt: "Use $milvus-sdk-csharp to trace and implement a repository-consistent C# SDK change."
+
+policy:
+  allow_implicit_invocation: true

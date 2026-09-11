@@ -1,0 +1,4 @@
+interface:
+  display_name: "Milvus Rust SDK"
+  short_description: "Maintain Milvus Rust SDK V1 and ClientV2"
+  default_prompt: "Use $milvus-sdk-rust to analyze or implement this Milvus Rust SDK V1/V2 task."

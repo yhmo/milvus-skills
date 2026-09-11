@@ -1,0 +1,4 @@
+interface:
+  display_name: "Milvus Conanfiles"
+  short_description: "Build and publish Milvus Conan 2 recipes"
+  default_prompt: "Use $milvus-conanfiles to add, validate, or publish a Milvus Conan 2.x recipe."

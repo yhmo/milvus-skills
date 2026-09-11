@@ -1,0 +1,7 @@
+interface:
+  display_name: "Milvus Java SDK"
+  short_description: "Develop, test, trace, and release the Java SDK"
+  default_prompt: "Use $milvus-sdk-java to trace and implement a repository-consistent Java SDK change."
+
+policy:
+  allow_implicit_invocation: true

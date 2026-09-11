@@ -1,0 +1,7 @@
+interface:
+  display_name: "Milvus RESTful API Service"
+  short_description: "Develop, trace, test, and review the Milvus RESTful API service"
+  default_prompt: "Use $milvus-restful to trace and implement a repository-consistent change to the Milvus RESTful API service."
+
+policy:
+  allow_implicit_invocation: true

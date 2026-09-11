@@ -1,0 +1,7 @@
+interface:
+  display_name: "Milvus Storage"
+  short_description: "Develop, test, trace, and release the Milvus columnar storage engine"
+  default_prompt: "Use $milvus-storage to trace and implement a repository-consistent change in milvus-storage."
+
+policy:
+  allow_implicit_invocation: true

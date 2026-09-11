@@ -1,0 +1,4 @@
+interface:
+  display_name: "React Review"
+  short_description: "Review one PR or recent review threads"
+  default_prompt: "Use $react-review on a specific GitHub PR URL, or scan recent PRs, to evaluate my open review threads and resolve addressed comments."

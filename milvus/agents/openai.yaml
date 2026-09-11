@@ -1,0 +1,4 @@
+interface:
+  display_name: "Milvus"
+  short_description: "Analyze and modify the Milvus server repository"
+  default_prompt: "Use $milvus to trace and implement a repository-consistent Milvus change."

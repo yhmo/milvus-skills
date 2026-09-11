@@ -1,0 +1,4 @@
+interface:
+  display_name: "Scan GitHub Runners"
+  short_description: "Find active runners across Milvus organizations"
+  default_prompt: "Use $scan-runner to find active macOS GitHub Actions runners."

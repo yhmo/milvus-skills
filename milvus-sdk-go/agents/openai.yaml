@@ -1,0 +1,7 @@
+interface:
+  display_name: "Milvus Go SDK"
+  short_description: "Develop, test, trace, and release the Go SDK"
+  default_prompt: "Use $milvus-sdk-go to trace and implement a repository-consistent Go SDK change."
+
+policy:
+  allow_implicit_invocation: true

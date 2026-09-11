@@ -1,0 +1,7 @@
+interface:
+  display_name: "Milvus Common"
+  short_description: "Analyze and modify the Milvus/Knowhere shared C++ library"
+  default_prompt: "Use $milvus-common to trace and implement a repository-consistent caching-layer or common-utility change."
+
+policy:
+  allow_implicit_invocation: true

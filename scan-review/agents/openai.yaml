@@ -1,0 +1,4 @@
+interface:
+  display_name: "Scan Review"
+  short_description: "Deep isolated reviews of recent external PRs"
+  default_prompt: "Use $scan-review to deeply review recent external-contributor PRs with isolated per-PR contexts and validated coverage."
