@@ -60,7 +60,50 @@ skill-name/
 
 ## Usage
 
-Skills are designed for AI agents (e.g. opencode, Claude) and are loaded on demand when a task matches a skill's description. They can also be read directly as reference documentation. Most skills assume the corresponding upstream repository is checked out locally — see the preferred checkout paths mentioned in each skill.
+Skills are designed for AI agents (e.g. opencode, Claude Code, Codex CLI) and are loaded on demand when a task matches a skill's description. They can also be read directly as reference documentation. Most skills assume the corresponding upstream repository is checked out locally — see the preferred checkout paths mentioned in each skill.
+
+### Installing as symlinks
+
+The skills use the standard `SKILL.md` format (`name` + `description` frontmatter), so the same directory works with opencode, Claude Code, and Codex CLI. Symlinking keeps a single source of truth — edits in this repo take effect in every agent immediately.
+
+Each agent loads skills from its user-level skills directory:
+
+| Agent | Skills directory |
+| --- | --- |
+| opencode | `~/.opencode/skills/` |
+| Claude Code | `~/.claude/skills/` |
+| Codex CLI | `~/.codex/skills/` |
+
+From the repo root, create symlinks for all skills into any of these directories:
+
+```bash
+for t in ~/.opencode/skills ~/.claude/skills ~/.codex/skills; do
+  for d in "$PWD"/*/; do
+    ln -s "$d" "$t/$(basename "$d")"
+  done
+done
+```
+
+> Note: the loop above installs all skills into every listed directory. To target a single agent, drop the `for t` wrapper and use one directory, e.g. `~/.opencode/skills`. Skip any directory you do not use (e.g. `~/.codex/skills` for a non-Codex setup).
+
+Pre-existing same-name entries must be removed first — `ln -s` only overwrites an existing *symlink*; a real directory at the target path would cause the link to be created *inside* it instead:
+
+```bash
+# remove an existing real directory (replaces it with the symlink)
+rm -rf ~/.opencode/skills/<skill-name>
+```
+
+Uninstall by deleting the symlinks:
+
+```bash
+for t in ~/.opencode/skills ~/.claude/skills ~/.codex/skills; do
+  for d in "$PWD"/*/; do
+    rm "$t/$(basename "$d")"
+  done
+done
+```
+
+After adding or updating skills, restart the agent (opencode/Claude Code/Codex CLI) so it re-scans the skills directory.
 
 ## License
 
