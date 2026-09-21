@@ -74,19 +74,15 @@ Each agent loads skills from its user-level skills directory:
 | Claude Code | `~/.claude/skills/` |
 | Codex CLI | `~/.codex/skills/` |
 
-From the repo root, create symlinks for all skills into any of these directories:
+From the repo root, run the provided installer to create symlinks for all skills into each of these directories (missing directories are created automatically):
 
 ```bash
-for t in ~/.opencode/skills ~/.claude/skills ~/.codex/skills; do
-  for d in "$PWD"/*/; do
-    ln -s "$d" "$t/$(basename "$d")"
-  done
-done
+./install.sh
 ```
 
-> Note: the loop above installs all skills into every listed directory. To target a single agent, drop the `for t` wrapper and use one directory, e.g. `~/.opencode/skills`. Skip any directory you do not use (e.g. `~/.codex/skills` for a non-Codex setup).
+> Note: the script installs all skills into every listed directory. To target a single agent, edit the `t` loop in `install.sh` to keep only the directories you use (e.g. `~/.opencode/skills`).
 
-Pre-existing same-name entries must be removed first — `ln -s` only overwrites an existing *symlink*; a real directory at the target path would cause the link to be created *inside* it instead:
+The script skips `.git`, overwrites existing symlinks with `ln -sfn`, and warns instead of overwriting when a target path is an existing real directory — remove it first:
 
 ```bash
 # remove an existing real directory (replaces it with the symlink)
