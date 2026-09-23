@@ -87,6 +87,26 @@ Other important layout:
 - Preserve naming conventions such as `ID`, `IDs`, `CollectionName`, `DatabaseName`, and `WithCollectionName`.
 - Update `MilvusClientV2.h` includes when a public method introduces a new DTO. Add a focused DTO unit test.
 
+## Beyond MilvusClientV2: separate capabilities
+
+`MilvusClientV2` is the primary API, but the SDK ships **independent static utilities** that are NOT methods on the
+client — easy to miss when tracing APIs:
+
+- **Bulk import (cloud REST)** — `milvus/BulkImport.h` (`milvus::BulkImport`) submits and manages **import jobs over
+  REST** against Milvus/Zilliz Cloud; no `MilvusClientV2` connection is needed. All methods are `static` and return
+  `nlohmann::json`:
+  - `BulkImport::CreateImportJobs(url, collection_name, files, db_name, api_key, partition_name, options)` — create an
+    import job (counterpart of pymilvus `bulk_import`).
+  - `BulkImport::ListImportJobs(url, collection_name, db_name, api_key)`
+  - `BulkImport::GetImportJobProgress(url, job_id, db_name, api_key)` — counterpart of pymilvus `get_import_progress`.
+  - `BulkImport::CommitImport(url, job_id, db_name, api_key)` / `AbortImport(...)` — for 2PC jobs created with
+    `auto_commit=false`.
+  - The `url` is the platform endpoint (e.g. `https://api.cloud.zilliz.com`), `api_key` the cloud API key.
+- The aggregate-header design above applies to `MilvusClientV2`; `BulkImport.h` is a standalone header (also reachable
+  from `milvus/MilvusClientV2.h`'s include tree via `BulkImport.h`).
+
+When a task mentions bulk import, route to `milvus::BulkImport` — not to `MilvusClientV2`.
+
 ## RPC execution and connection lifecycle
 
 Most APIs compose up to five stages:

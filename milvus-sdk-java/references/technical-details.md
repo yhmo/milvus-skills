@@ -147,3 +147,24 @@ Common V2 enums and schema/index types live under `io.milvus.v2.common`. Vector 
 The build generates Java protobuf and gRPC sources from `sdk-core/src/main/milvus-proto/proto`. `sdk-core` shades and relocates gRPC into `io.milvus.shaded...`; do not assume runtime stack traces or downstream dependency trees use unshaded gRPC packages.
 
 BulkWriter is separate because it adds Parquet/Hadoop and cloud-storage dependencies. Its design supports local, remote, and volume writers plus storage clients and REST import/volume APIs.
+
+## Beyond MilvusClientV2: separate capabilities
+
+The SDK is more than the `MilvusClientV2` facade. Two capabilities live outside `sdk-core` / `io.milvus.v2` and are
+easy to miss when tracing APIs:
+
+- **Client pools** — `io.milvus.pool.MilvusClientV2Pool` and `MilvusClientV1Pool` reuse clients through a common pool
+  implementation (keyed by `ConnectConfig`), for applications that need many short-lived client instances. They are part
+  of `sdk-core` but are NOT methods on `MilvusClientV2`.
+- **BulkWriter / bulk import** — shipped as the separate **`io.milvus:milvus-sdk-java-bulkwriter`** artifact
+  (`sdk-bulkwriter` module, package `io.milvus.bulkwriter`). It writes CSV/JSON/Parquet data via `LocalBulkWriter` /
+  `RemoteBulkWriter` / `VolumeBulkWriter`/`VolumeManager`, AND it exposes **cloud REST import** — you do NOT need a
+  MilvusClientV2 to submit an import job against Milvus/Zilliz Cloud:
+  - `io.milvus.bulkwriter.restful.BulkImportUtils.bulkImport(url, BaseImportRequest)` — submit a cloud import job
+    (counterpart of pymilvus `bulk_import`).
+  - `BulkImportUtils.getImportProgress(...)`, `listImportJobs(...)`, `commitImport(...)`, `abortImport(...)`.
+  - Request models under `io.milvus.bulkwriter.request.*` (e.g. `import_.CloudImportRequest` /
+    `import_.MilvusImportRequest` / `import_.VolumeImportRequest` — each a `BaseImportRequest` carrying
+    `collectionName`, `files`/`objectUrl`, `accessKey`/`secretKey`, `clusterId`, etc.).
+
+When a task mentions bulk writing/import or client pooling, route to these modules — not to `MilvusClientV2`.

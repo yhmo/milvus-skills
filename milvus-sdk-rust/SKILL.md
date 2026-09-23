@@ -66,6 +66,17 @@ Maintain deprecated V1 compatibility and active V2 development as separate API s
 - Mark public request and response DTOs `#[non_exhaustive]`. Mark extensible public enums `#[non_exhaustive]` and require wildcard match arms.
 - Preserve unrelated dirty-worktree changes. Never reformat or rewrite V1 incidentally during V2 work.
 
+## Beyond ClientV2: bulk import
+
+`ClientV2` is not the whole SDK. The crate also ships a **standalone bulk-import client**
+(`milvus::v2::bulk_import::BulkImport`, re-exported through `milvus::v2::prelude::*`) that calls the Milvus/Zilliz
+Cloud **import REST API** directly — no `ClientV2` connection needed. It provides `bulk_import(...)`,
+`list_import_jobs(...)`, `get_import_progress(...)` (counterparts of pymilvus `bulk_import` / `get_import_progress`),
+with `BulkImportConfig` (url + api_key + TLS options) and builder-based requests
+(`BulkImportRequest::builder()...build()?`). There is **no client pool** in the Rust SDK (unlike Java). See
+`references/technical-details.md` → "Beyond ClientV2: bulk import". Route bulk-import work to
+`bulk_import::BulkImport`, not to `ClientV2`.
+
 ## ClientV2 pattern
 
 - Construct clients with `ClientV2::new(&ConnectConfig)`. Keep the lower-level `connect(ConnectConfig)` private.

@@ -64,6 +64,15 @@ language SDK except when comparing behavior.
 - When committing, use `git commit -sm 'message'` so the committer's email address is recorded; every commit in this repository must carry a Signed-off-by trailer.
 - When creating a pull request, ensure each PR contains exactly one commit.
 
+## Beyond MilvusClientV2: separate capabilities
+
+`MilvusClientV2` is not the whole SDK. The client also ships **`milvus::BulkImport`** — a standalone static-utility
+class that talks to the Milvus/Zilliz Cloud **import REST API** (no client connection needed): `CreateImportJobs`,
+`ListImportJobs`, `GetImportJobProgress`, `CommitImport`, `AbortImport` (counterparts of pymilvus `bulk_import` /
+`get_import_progress`). There is **no client pool** in the C++ SDK (unlike Java). See
+`references/technical-details.md` → "Beyond MilvusClientV2". Route bulk-import work to `BulkImport`, not
+`MilvusClientV2`.
+
 ## Helpers
 
 Run bundled helpers from the SDK repository root. `$SKILL_DIR` is this skill's base directory — the directory that directly contains both `SKILL.md` and `scripts/` — as exposed by the host agent that loaded the skill (or locate it yourself); never hardcode a `.codex`, `.opencode`, or other agent-specific prefix.
@@ -80,3 +89,4 @@ Run bundled helpers from the SDK repository root. `$SKILL_DIR` is this skill's b
 - Diagnose connection, retry, deadline, cache, consistency, iterator, or schema-refresh behavior.
 - Build/test with CMake or Conan, investigate Linux/macOS/Windows CI, or fix package exports.
 - Update examples, prepare a release, summarize a release window, or review a C++ SDK PR.
+- Work with bulk import (`milvus::BulkImport` — cloud REST import jobs).

@@ -62,6 +62,27 @@ Ownership boundaries:
 
 Keep `src/v2/client.rs` short. Add feature methods to the appropriate area module.
 
+## Beyond ClientV2: bulk import
+
+`ClientV2` is the primary API, but the SDK also ships a **standalone bulk-import client** that talks to the
+Milvus/Zilliz Cloud import REST API directly — no `ClientV2` connection is needed (counterpart of pymilvus
+`bulk_import` / `get_import_progress`):
+
+- `milvus::v2::bulk_import::BulkImport` (re-exported via `milvus::v2::prelude::*` and `src/v2/mod.rs`).
+- Construct with `BulkImport::new(&BulkImportConfig)`. `BulkImportConfig` holds `url` (the platform endpoint, e.g.
+  `https://api.cloud.zilliz.com`), `api_key`, `timeout`, TLS options (`verify_tls`, `ca_certificate_path`,
+  `client_identity_path`, `client_certificate_path`, `client_private_key_path`).
+- Methods are async:
+  - `bulk_import(&self, request: BulkImportRequest) -> Result<BulkImportResponse>` — submit a cloud import job.
+  - `list_import_jobs(&self, request: ListImportJobsRequest)` — list jobs.
+  - `get_import_progress(&self, request: GetImportProgressRequest)` — job progress.
+- Requests are builder-based (`BulkImportRequest::builder()...build()?`, `ListImportJobsRequest`, etc.), carrying
+  `database_name`, `collection_name`, `files`/`object_urls`, `cluster_id`, `access_key`/`secret_key`, and options.
+- Auth is via `Authorization: Bearer <api_key>` (plus a `DB-Name` header when a database is set), so this client does
+  not use the gRPC channel, session, or caches of `ClientV2`.
+
+When a task mentions bulk import, route to `milvus::v2::bulk_import::BulkImport` — not to `ClientV2`.
+
 ## V1 compatibility boundary
 
 Crate-root imports remain V1, including:

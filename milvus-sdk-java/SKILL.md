@@ -80,6 +80,22 @@ For architecture or implementation work, normally read both `technical-details.m
 - When committing, use `git commit -sm 'message'` so the committer's email address is recorded; every commit in this repository must carry a Signed-off-by trailer.
 - When creating a pull request, ensure each PR contains exactly one commit.
 
+## Beyond MilvusClientV2: separate capabilities
+
+`MilvusClientV2` is not the whole SDK. Two capabilities live outside the facade and are easy to miss when tracing
+APIs:
+
+- **Client pools** — `io.milvus.pool.MilvusClientV2Pool` / `MilvusClientV1Pool` (in `sdk-core`), for pooling clients
+  keyed by `ConnectConfig`. Not methods on `MilvusClientV2`.
+- **BulkWriter / bulk import** — the separate **`io.milvus:milvus-sdk-java-bulkwriter`** artifact
+  (`io.milvus.bulkwriter`): local/remote/volume writers, plus **cloud REST import** via
+  `restful.BulkImportUtils.bulkImport(...)` / `getImportProgress(...)` / `listImportJobs(...)` / `commitImport(...)` /
+  `abortImport(...)` (counterparts of pymilvus `bulk_import` / `get_import_progress`). Requests under
+  `io.milvus.bulkwriter.request.*`.
+
+See `references/technical-details.md` → "Beyond MilvusClientV2". Route bulk-import work to `bulkwriter`, pooling work
+to `io.milvus.pool` — not to `MilvusClientV2`.
+
 ## Validation
 
 - Prefer the narrowest relevant test first.
