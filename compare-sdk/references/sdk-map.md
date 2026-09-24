@@ -188,8 +188,24 @@ SDKs' names. The facade class is split into partials (`MilvusClientV2.cs` plus
 `.Dml.cs`, `.Dql.cs`, `.Index.cs`, `.Partition.cs`, `.Rbac.cs`,
 `.ResourceGroup.cs`, `.Utility.cs`), so concatenate all of them for extraction.
 
-## Naming convention mapping
+## Deprecation markers per SDK (Step 2 deprecated-status comparison)
 
+Detect deprecation status on each SDK pinned to the branch. Marker syntax and
+example grep commands:
+
+| SDK | Marker | Detection on the pinned branch |
+|---|---|---|
+| pymilvus | `@deprecated` decorator (from `pymilvus.decorators`) | `git -C "$HOME/work/git-go/pymilvus" show source/<branch>:pymilvus/milvus_client/milvus_client.py \| grep -nA2 '@deprecated'` |
+| java | `@Deprecated` annotation | `git -C "$HOME/work/git-go/milvus-sdk-java" show source/<branch>:sdk-core/src/main/java/io/milvus/v2/client/MilvusClientV2.java \| grep -nB1 '@Deprecated'` |
+| cpp | `[[deprecated(...)]]` attribute | `git -C "$HOME/work/git-go/milvus-sdk-cpp" show source/<branch>:src/include/milvus/MilvusClientV2.h \| grep -nB1 'deprecated'` |
+| rust | `#[deprecated(...)]` attribute | `git -C "$HOME/work/git-go/milvus-sdk-rust" show source/<branch>:src/v2/client.rs \| grep -nA1 '#\[deprecated'` (repeat per `src/v2/client/*.rs`) |
+| csharp | `[Obsolete]` attribute | `git -C "$HOME/work/git-go/milvus-sdk-csharp" show source/<branch>:<MilvusClientV2.cs or partial> \| grep -nB1 'Obsolete'` |
+
+Match the deprecation marker to the method it annotates (it precedes the
+declaration). A deprecated plain variant that has a covering `*V2` variant is
+legacy-compat, not a deprecation gap (see SKILL.md Step 2).
+
+## Naming convention mapping
 | pymilvus | java | cpp | csharp | rust |
 |---|---|---|---|---|
 | `create_collection` | `createCollection` | `CreateCollection` | `CreateCollectionAsync` | `create_collection` |

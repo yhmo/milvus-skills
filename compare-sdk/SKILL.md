@@ -77,6 +77,20 @@ For each of the two SDKs:
 - Exclude audited-SDK helper, lifecycle, and deprecated methods from gap counts
   (keep the documented Java exclusion set from `references/sdk-map.md`); mark
   those rows as ignored rather than counting them missing.
+- **Deprecated-status comparison (bidirectional):** for every interface mapped
+  on BOTH sides, compare the deprecation markers (pymilvus `@deprecated`,
+  java `@Deprecated`, cpp `[[deprecated]]`, rust `#[deprecated]`, csharp
+  `[Obsolete]`). A divergence in either direction marks the row
+  `Partial - deprecated in <sdk> but not in <sdk>` and is reported in Main gaps:
+  - baseline interface deprecated but the audited side not yet marked;
+  - audited-side interface deprecated but the baseline not yet marked.
+  This is symmetric and independent of the parity-target exclusion above: the
+  exclusion still applies to audited-SDK helper/lifecycle/deprecated methods
+  with no mapped baseline equivalent (the Java exclusion set in
+  `references/sdk-map.md`), but a row that maps on both sides with divergent
+  deprecation status is always a `Partial` gap. A deprecated plain variant that
+  sits under a covering `*V2` variant (e.g. deprecated `searchIterator` under
+  `searchIteratorV2`) is legacy-compat, not a deprecation gap.
 - Java `*V2` variants are COVERAGE, not exclusions. When java exposes both a
   plain and a `*V2` variant for a baseline interface, prefer the `*V2` variant
   for parity (per `references/sdk-map.md`). If the `*V2` variant expresses the
@@ -319,6 +333,15 @@ Mechanism 3 - Retry policy (RPC failure handling):
   side and an audited-side rule absent from the baseline are both recorded as
   `Partial` with the rule named. Validation order and error-message wording
   are never gaps.
+- Deprecated-status comparison is symmetric: an interface deprecated on the
+  baseline but not on the audited side, and one deprecated on the audited side
+  but not on the baseline, are both recorded as `Partial - deprecated in <sdk>
+  but not in <sdk>` and listed in Main gaps. Detection markers per SDK:
+  pymilvus `@deprecated`, java `@Deprecated`, cpp `[[deprecated]]`, rust
+  `#[deprecated]`, csharp `[Obsolete]`. Audited-side deprecated methods with no
+  mapped baseline equivalent remain in the helper/deprecated exclusion
+  (Ignored), and deprecated plain variants under a covering `*V2` variant
+  remain legacy-compat (not gaps).
 - Required-name emptiness guards are recorded once as a cross-cutting note, not
   per-row `Partial`s (see Step 5); the server backs them, so the routine
   Missing direction is not a gap. The Extra direction (audited side rejects

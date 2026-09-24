@@ -8,8 +8,13 @@ Compiles and runs with `cargo run`.
 Note: the user guide currently has no rust snippets; this runner is prepared
 for the future rust SDK coverage.
 
-Usage: python3 run_page_rust.py <page.md>
+Optionally pre-checks API calls against the per-tag SDK index (see
+gen_api_index.py / api_index.py): pass --api-index DIR --sdk-tag rust@TAG to
+pin the crate version to TAG and report unknown SDK calls before compiling.
+
+Usage: python3 run_page_rust.py <page.md> [--api-index DIR --sdk-tag rust@TAG]
 """
+import argparse
 import json
 import os
 import shutil
@@ -53,9 +58,30 @@ def main():
     if not shutil.which("cargo"):
         print("rust: cargo not installed — SKIPPING rust verification")
         sys.exit(0)
-    page = sys.argv[1]
+    ap = argparse.ArgumentParser(add_help=False)
+    ap.add_argument("--api-index", default="")
+    ap.add_argument("--sdk-tag", default="")
+    args, rest = ap.parse_known_args(sys.argv[1:])
+    page = rest[0]
     md = open(page).read()
     blocks = re.findall(r"```rust\n(.*?)```", md, re.S)
+
+    # API-existence pre-check (soft)
+    if args.api_index and args.sdk_tag:
+        sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+        import api_index as ai
+        sdk, _, tag = args.sdk_tag.partition("@")
+        idx = ai.resolve_index(sdk, tag, args.api_index)
+        if idx:
+            print(f"rust: API index {idx}")
+            for i, b in enumerate(blocks):
+                unknown = ai.check_code(idx, "rust", b, sdk)
+                if unknown:
+                    print(f"rust: block {i}: {len(unknown)} unknown SDK call(s)")
+                    for expr, sym in unknown[:10]:
+                        print(f"      {sym}  (from {expr!r})")
+        else:
+            print(f"rust: WARN no API index for {sdk}@{tag} — skipping API pre-check")
 
     uses = []
     bodies = []
@@ -79,11 +105,14 @@ def main():
     prog += "    Ok(())\n}\n"
 
     os.makedirs(SRC, exist_ok=True)
-    try:
-        ver = latest_version()
-    except Exception as e:
-        print(f"rust: could not resolve latest milvus-sdk-rust from crates.io ({e}) — SKIPPING rust verification")
-        sys.exit(0)
+    if args.sdk_tag:
+        ver = args.sdk_tag.partition("@")[2].lstrip("v")
+    else:
+        try:
+            ver = latest_version()
+        except Exception as e:
+            print(f"rust: could not resolve latest milvus-sdk-rust from crates.io ({e}) — SKIPPING rust verification")
+            sys.exit(0)
     with open(os.path.join(PROJ, "Cargo.toml"), "w") as f:
         f.write(cargo_toml(ver))
     with open(os.path.join(SRC, "main.rs"), "w") as f:

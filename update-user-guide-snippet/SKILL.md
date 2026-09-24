@@ -242,24 +242,57 @@ Updating a document WITHOUT the corresponding SDK skill risks API deviations
    identity must be `ready`. If not, stop and ask to run the `lark-shared`
    device-flow login. Also read `references/sdk-map.md`
    for the SDKs you will touch.
-0b. **Clone the SDK repos you need** (once per run) into the gitignored
-   `sdk-tmp/sdks/`, using the repo names in
+0b. **Get the SDK repos you need** (once per run). **Prefer an existing local
+   checkout first** (`$HOME/work/git-go/<repo>` when present) — it avoids a
+   GitHub clone and, since tags are already there, usually avoids the network
+   `fetch` too. Only fall back to cloning into the gitignored
+   `sdk-tmp/sdks/` when no local checkout exists. Repo names come from
    `references/sdk-map.md`:
 
    ```bash
    SDK_URL_BASE=https://github.com/milvus-io
    prepare_sdk() {
-     local dir="sdk-tmp/sdks/$1"
-     if [ ! -d "$dir/.git" ]; then
-       git clone --filter=blob:none --no-checkout "$SDK_URL_BASE/$1.git" "$dir"
+     local name="$1" local_dir="$HOME/work/git-go/$1" sdk_dir="sdk-tmp/sdks/$1"
+     # 1) prefer the local checkout
+     if [ -d "$local_dir/.git" ]; then
+       if [ -z "$(git -C "$local_dir" tag)" ]; then
+         git -C "$local_dir" fetch --tags --force origin   # only if tags missing
+       fi
+       echo "using local checkout: $local_dir"
+       return
      fi
-     git -C "$dir" fetch --tags --force origin   # always refresh tags
+     # 2) fall back to cloning into the gitignored sdk-tmp
+     if [ ! -d "$sdk_dir/.git" ]; then
+       git clone --filter=blob:none --no-checkout "$SDK_URL_BASE/$name.git" "$sdk_dir"
+     fi
+     git -C "$sdk_dir" fetch --tags --force origin
+     echo "using cloned repo: $sdk_dir"
    }
    prepare_sdk milvus-sdk-cpp    # repeat per SDK you will touch
    ```
 
    The Go SDK is an exception: it lives inside `milvus-io/milvus` — use
    `prepare_sdk milvus` and diff under `client/` (per `sdk-map.md`).
+
+   **API index (per-SDK, per-tag; generated once, reused forever).** To avoid
+   repeatedly grepping the large SDK repos, generate a flat API index for each
+   SDK@tag you will touch (mirrors `sdk-map.md`'s latest tag):
+   `scripts/gen_api_index.py` writes a TSV of every public method / builder /
+   constructor with its **full parameter list** into
+   `sdk-tmp/api-index/<sdk>-<tag>.tsv`:
+
+   ```bash
+   # one-time per SDK@tag (uses the local checkout from prepare_sdk above)
+   python3 scripts/gen_api_index.py --sdk java --tag v3.0.10 \
+     --repo $HOME/work/git-go/milvus-sdk-java --out sdk-tmp/api-index/java-v3.0.10.tsv
+   # or generate every SDK at one tag (uses $HOME/work/git-go):
+   python3 scripts/gen_api_index.py --all --tag v3.0.10 \
+     --repo-root $HOME/work/git-go --out sdk-tmp/api-index
+   ```
+
+   A git tag never changes, so a cached index is valid forever. Query it
+   directly, or let the tools below consume it:
+   `python3 scripts/api_index.py <sdk> <tag> <symbol...>`.
 1. **Enumerate the documents.** Resolve the user-provided URL per the Scope
    rules (directory table records or document links → wiki links) and build the
    list of documents to process. For each document, record its title and docx
@@ -351,7 +384,28 @@ Updating a document WITHOUT the corresponding SDK skill risks API deviations
     It reads the fetch XML, extracts every `<pre lang="...">` block, undoes the
     XML escaping (`&lt;`→`<`, `&gt;`→`>`, `&amp;`→`&`, `<br/>`→newline, drops
     `<em>`), writes each to `sdk-tmp/snippet-check/`, and runs the per-language
-    parse check. Manually, the same steps are:
+    parse check.
+
+    **API-existence cross-check (soft findings) — pass `--api-index` and one
+    `--sdk-tag sdk@tag` per SDK present in the document** to have the check
+    report SDK calls that are not in the per-tag API index (see Step 0b):
+
+    ```bash
+    lark-cli docs +fetch --doc <docx> --scope section \
+        --start-block-id <heading-block-id> --detail with-ids --as user \
+      | python3 scripts/check_snippets.py --doc "<Doc Title>" \
+          --api-index sdk-tmp/api-index \
+          --sdk-tag java@v3.0.10 --sdk-tag node@v3.0.5
+    ```
+
+    Unknown calls are reported per block as `API?` findings — they are **soft**:
+    response-object members, doc-defined constants, and cross-block variables
+    legitimately absent from the index (e.g. `resp.getJobId()`) should be
+    verified manually, not assumed wrong. `python`/`pymilvus`, and go tags
+    `client/vX.Y.Z`, are normalized automatically (`python@v3.0.2` reads the
+    `pymilvus-v3.0.2.tsv` index; `go@client/v3.0.0-beta` reads
+    `go-v3.0.0-beta.tsv`).
+    Manually, the same steps are:
     - Fetch the section again (`docs +fetch --scope section --detail with-ids`),
       pull each edited `<pre>`'s code text, undo the XML escaping, and write it
       to `sdk-tmp/snippet-check/<lang>/<doc>-<n>.<ext>`.
@@ -486,14 +540,21 @@ Updating a document WITHOUT the corresponding SDK skill risks API deviations
       # node
       node scripts/run_page_node.mjs <extracted.md>
       # go (needs client/v2 module; run from sdk-tmp/snippet-run/go)
-      python3 scripts/run_page_go.py <extracted.md>
+      python3 scripts/run_page_go.py <extracted.md> [--api-index sdk-tmp/api-index --sdk-tag go@client/v3.0.0-beta]
       # java (needs maven + milvus-sdk-java)
-      python3 scripts/run_page_java.py <extracted.md>
+      python3 scripts/run_page_java.py <extracted.md> [--api-index sdk-tmp/api-index --sdk-tag java@v3.0.10]
       # rust (resolves the latest milvus-sdk-rust version from crates.io)
-      python3 scripts/run_page_rust.py <extracted.md>
+      python3 scripts/run_page_rust.py <extracted.md> [--api-index sdk-tmp/api-index --sdk-tag rust@v3.0.2]
       # cpp (uses a prebuilt milvus-sdk-cpp binary from default-conan-local2)
-      python3 scripts/run_page_cpp.py <extracted.md> [<version>]
+      python3 scripts/run_page_cpp.py <extracted.md> [<version>] [--api-index sdk-tmp/api-index --sdk-tag cpp@v3.0.3]
       ```
+
+      **API-index integration.** Pass `--api-index <dir> --sdk-tag sdk@tag` to a
+      runner to (a) pin the SDK dependency version to TAG (java/rust/go/cpp —
+      skipping the network registry lookup) and (b) print a soft pre-compile
+      report of SDK calls not found in the per-tag index (see Step 0b). The
+      compile/run step remains authoritative — unknown-call reports are advisory
+      only.
 
       The cpp runner installs a **prebuilt** `milvus-sdk-cpp/<version>@milvus/dev`
       binary from the `default-conan-local2` Conan repo with `--build=never`. If

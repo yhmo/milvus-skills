@@ -14,7 +14,7 @@ under `/home/myh/Videos`; treat the structure here as authoritative):
 | Status | Meaning |
 |---|---|
 | Implemented | The audited SDK exposes an equivalent facade or request API with the same core capability. |
-| Partial | The audited SDK has the underlying capability but is missing a baseline input parameter or an observable output value/behavior, or input-validation semantics diverge in either direction (see Input Validation Comparison), or wire-expressiveness diverges - proto member mapping, data encoding, or RPC-issuance short-circuit mismatch (see Wire-expressiveness audit), or an internal mechanism diverges - CollectionTsCache / SchemaCache / Retry behavior mismatch (see Internal Mechanisms Comparison). |
+| Partial | The audited SDK has the underlying capability but is missing a baseline input parameter or an observable output value/behavior, or input-validation semantics diverge in either direction (see Input Validation Comparison), or wire-expressiveness diverges - proto member mapping, data encoding, or RPC-issuance short-circuit mismatch (see Wire-expressiveness audit), or an internal mechanism diverges - CollectionTsCache / SchemaCache / Retry behavior mismatch (see Internal Mechanisms Comparison), or deprecation status diverges - the interface is marked deprecated on one side but not the other (bidirectional, see Main gaps and API Comparison). |
 | **Missing** | No equivalent audited-SDK facade/request API was found. |
 | Ignored / excluded | Helper, lifecycle, config, deprecated, or legacy-V1 surface not treated as a parity target. |
 
@@ -73,6 +73,16 @@ under `/home/myh/Videos`; treat the structure here as authoritative):
   APIs, missing `guarantee_timestamp` wiring for `ConsistencyLevel.Session`,
   missing RateLimit retry (legacy 49 / current 8), and missing
   schema-mismatch single retry ARE gaps.
+- Deprecated-status divergences count as `Partial` in BOTH directions: the
+  interface is marked deprecated on the baseline but not on the audited side,
+  OR marked deprecated on the audited side but not on the baseline. Report each
+  in Main gaps and mark the API Comparison row
+  `Partial - deprecated in <sdk> but not in <sdk>`. Deprecation markers per SDK:
+  pymilvus `@deprecated`, java `@Deprecated`, cpp `[[deprecated]]`, rust
+  `#[deprecated]`, csharp `[Obsolete]`. A deprecated audited-side method with no
+  mapped baseline equivalent stays in the helper/deprecated exclusion (Ignored),
+  not a gap; a deprecated plain variant under a covering `*V2` variant is
+  legacy-compat, not a gap.
 - DataType/IndexType enum comparison is included only when neither SDK is
   pymilvus; when pymilvus is involved, omit those sections entirely.
 
@@ -109,6 +119,10 @@ Scope:
     `ConsistencyLevel.Session`, SchemaCache describe-collection short-circuit,
     Retry policy incl. RateLimit retry) and what is ignored (singleton-vs-client
     scoping, cache-key normalization)
+  - deprecated-status comparison in both directions (interface marked
+    deprecated on one side but not the other) and what is ignored (audited-side
+    deprecated methods with no mapped baseline equivalent, deprecated plain
+    variants under a covering `*V2` variant)
   - wrapper-shape and enum conventions
 
 ## Summary
@@ -124,6 +138,10 @@ Scope:
 
 - Missing API: <none>, or a table of the missing interfaces.
 - Partial parameter or output gaps: table with columns `Method` and `Gap`.
+- Deprecated-status divergences: one bullet (or small table) per interface whose
+  deprecation status differs between the two SDKs, in both directions, e.g.
+  `searchIteratorV2: deprecated in java but not in pymilvus`,
+  `list_collections: deprecated in pymilvus but not in java`.
 
 Minor behavioral nuances (counted as Implemented, noted for awareness):
 - one bullet per nuance (e.g. None-vs-exception, missing page timestamp).
@@ -132,9 +150,12 @@ Minor behavioral nuances (counted as Implemented, noted for awareness):
 
 | <SDK1 API> | <SDK2 API> | Status |
 |---|---|---|
+| `search_iterator` | `searchIteratorV2` | Partial - deprecated in java but not in pymilvus |
 
 One row per interface. Status is `Implemented`, `Partial - <reason>`,
-`**Missing**`, or a note like `Ignored helper API`. Order the rows by domain
+`**Missing**`, or a note like `Ignored helper API`. A deprecation-status
+divergence is marked `Partial - deprecated in <sdk> but not in <sdk>`
+(bidirectional). Order the rows by domain
 grouping (session/config, collection/schema, partition, index, DML/DQL,
 database, alias, RBAC, resource group, snapshot, CDC, utility).
 

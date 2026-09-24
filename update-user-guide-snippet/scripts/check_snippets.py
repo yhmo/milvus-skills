@@ -6,10 +6,16 @@ Reads the XML `content` produced by `lark-cli docs +fetch ... --detail with-ids`
 undoes the XML escaping the document uses (&lt;, &gt;, &amp;, <br/>, <em>), and
 runs a parse-only syntax check per language with the local toolchain.
 
+Optionally cross-checks API calls against the per-tag SDK API index
+(see `gen_api_index.py` / `api_index.py`): pass --api-index (index dir) and
+--sdk-tag sdk@tag (repeatable). Unknown SDK calls are reported per block
+(soft findings, not hard failures).
+
 Usage:
   lark-cli docs +fetch --doc <docx> --scope section \
       --start-block-id <heading> --detail with-ids --as user | \
-    python3 check_snippets.py --doc "Create Collection" [--sdk-tmp sdk-tmp]
+    python3 check_snippets.py --doc "Create Collection" [--sdk-tmp sdk-tmp] \
+      [--api-index sdk-tmp/api-index --sdk-tag java@v3.0.10 --sdk-tag node@v3.0.5]
 
   python3 check_snippets.py --xml section.xml --doc "Create Collection"
 
@@ -17,6 +23,8 @@ Options:
   --doc NAME       human-readable label for the report (default "doc")
   --out-dir DIR    where extracted snippet files are written (default: sdk-tmp/snippet-check)
   --cpp-includes   colon-separated include dirs for the cpp check (default: none)
+  --api-index DIR  directory holding per-(sdk, tag) API index .tsv files
+  --sdk-tag SDK@TAG  enable API-existence check for this SDK@tag (repeatable)
 
 Exit code is non-zero if any parseable block fails its syntax check.
 """
@@ -70,6 +78,8 @@ def main():
     ap.add_argument("--doc", default="doc", help="label for the report")
     ap.add_argument("--out-dir", default="sdk-tmp/snippet-check")
     ap.add_argument("--cpp-includes", default="", help="colon-separated include dirs")
+    ap.add_argument("--api-index", default="", help="dir holding per-(sdk,tag) API index .tsv")
+    ap.add_argument("--sdk-tag", action="append", default=[], metavar="SDK@TAG")
     args = ap.parse_args()
 
     if args.xml:
@@ -89,12 +99,26 @@ def main():
 
     os.makedirs(args.out_dir, exist_ok=True)
 
+    # Build per-lang ApiIndex from --sdk-tag entries.
+    idx_by_lang = {}
+    if args.api_index:
+        sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+        import api_index as ai
+        for sdk_tag in args.sdk_tag:
+            sdk, _, tag = sdk_tag.partition("@")
+            idx = ai.resolve_index(sdk, tag, args.api_index)
+            if idx:
+                idx_by_lang[idx.lang] = idx
+            else:
+                print(f"  WARN: no API index for {sdk}@{tag} in {args.api_index}")
+
     blocks = PRE_RE.findall(content)
     if not blocks:
         print(f"=== {args.doc}: no <pre> code blocks found (raw length {len(content)})")
         return 0
 
     results = []
+    api_findings = 0
     for i, (lang_raw, body) in enumerate(blocks):
         lang = normalize_lang(lang_raw)
         if lang in IGNORED:
@@ -129,6 +153,16 @@ def main():
         except subprocess.TimeoutExpired:
             results.append((i, lang_raw, "skipped (timeout)", True))
 
+        # API-existence cross-check (soft findings)
+        if lang in idx_by_lang:
+            idx = idx_by_lang[lang]
+            unknown = ai.check_code(idx, lang, code, idx.sdk)
+            if unknown:
+                api_findings += len(unknown)
+                print(f"  API? [{lang}] block {i}: {len(unknown)} unknown SDK call(s)")
+                for expr, sym in unknown[:10]:
+                    print(f"      {sym}  (from {expr!r})")
+
     print(f"=== {args.doc}: {len(blocks)} code blocks, "
           f"{sum(1 for r in results if r[2] == 'OK')} OK, "
           f"{sum(1 for r in results if not r[3])} FAIL ===")
@@ -139,6 +173,11 @@ def main():
             print(f"  [{r[1]}] block {r[0]}: FAIL")
             for line in r[4]:
                 print(f"      {line}")
+
+    if api_findings:
+        print(f"=== {args.doc}: {api_findings} API calls not found in SDK index "
+              f"(soft findings — verify manually if they are response-object "
+              f"members or doc-defined constants) ===")
 
     return 0 if all(r[3] for r in results) else 1
 

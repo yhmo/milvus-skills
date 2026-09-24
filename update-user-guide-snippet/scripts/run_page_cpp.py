@@ -7,8 +7,13 @@ installed with `--build=never` and the page's ```cpp blocks are compiled and
 run against it. If no prebuilt binary is found, cpp verification is SKIPPED
 (reported, not failed).
 
-Usage: python3 run_page_cpp.py <page.md> [<version>]
+Optionally pre-checks API calls against the per-tag SDK index (see
+gen_api_index.py / api_index.py): pass --api-index DIR --sdk-tag cpp@TAG to
+pin the requested version to TAG and report unknown SDK calls before compiling.
+
+Usage: python3 run_page_cpp.py <page.md> [<version>] [--api-index DIR --sdk-tag cpp@TAG]
 """
+import argparse
 import os
 import re
 import shutil
@@ -50,11 +55,16 @@ def latest_remote_version():
 
 
 def main():
-    page = sys.argv[1]
+    ap = argparse.ArgumentParser(add_help=False)
+    ap.add_argument("--api-index", default="")
+    ap.add_argument("--sdk-tag", default="")
+    args, rest = ap.parse_known_args(sys.argv[1:])
+    page = rest[0]
     if not shutil.which("conan"):
         print("cpp: conan not installed — SKIPPING cpp verification")
         sys.exit(0)
-    version = sys.argv[2] if len(sys.argv) > 2 else latest_remote_version()
+    version = args.sdk_tag.partition("@")[2].lstrip("v") if args.sdk_tag else \
+        (rest[1] if len(rest) > 1 else latest_remote_version())
     if not version:
         print("cpp: no milvus-sdk-cpp recipe on the remote — skipping cpp verification")
         sys.exit(0)
@@ -66,6 +76,23 @@ def main():
 
     md = open(page).read()
     blocks = re.findall(r"```cpp\n(.*?)```", md, re.S)
+
+    # API-existence pre-check (soft)
+    if args.api_index and args.sdk_tag:
+        sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+        import api_index as ai
+        sdk, _, tag = args.sdk_tag.partition("@")
+        idx = ai.resolve_index(sdk, tag, args.api_index)
+        if idx:
+            print(f"cpp: API index {idx}")
+            for i, b in enumerate(blocks):
+                unknown = ai.check_code(idx, "cpp", b, sdk)
+                if unknown:
+                    print(f"cpp: block {i}: {len(unknown)} unknown SDK call(s)")
+                    for expr, sym in unknown[:10]:
+                        print(f"      {sym}  (from {expr!r})")
+        else:
+            print(f"cpp: WARN no API index for {sdk}@{tag} — skipping API pre-check")
 
     inc = os.path.join(DEPLOY, "include")
     lib = os.path.join(DEPLOY, "lib")

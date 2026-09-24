@@ -5,8 +5,14 @@ Extracts every ```java block, hoists imports from the first block, wraps the
 block bodies in a RunPage.main() and compiles/runs it with Maven against the
 milvus-sdk-java dependency.
 
-Usage: python3 run_page_java.py <page.md>
+Optionally pre-checks API calls against the per-tag SDK index (see
+gen_api_index.py / api_index.py): pass --api-index DIR --sdk-tag java@TAG to
+pin the milvus-sdk-java version to TAG (skipping the Maven Central network
+lookup) and report unknown SDK calls before compiling.
+
+Usage: python3 run_page_java.py <page.md> [--api-index DIR --sdk-tag java@TAG]
 """
+import argparse
 import os
 import shutil
 import re
@@ -51,9 +57,30 @@ def main():
     if not shutil.which("mvn"):
         print("java: mvn not installed — SKIPPING java verification")
         sys.exit(0)
-    page = sys.argv[1]
+    ap = argparse.ArgumentParser(add_help=False)
+    ap.add_argument("--api-index", default="")
+    ap.add_argument("--sdk-tag", default="")
+    args, rest = ap.parse_known_args(sys.argv[1:])
+    page = rest[0]
     md = open(page).read()
     blocks = re.findall(r"```java\n(.*?)```", md, re.S)
+
+    # API-existence pre-check (soft; compile still authoritative)
+    if args.api_index and args.sdk_tag:
+        sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+        import api_index as ai
+        sdk, _, tag = args.sdk_tag.partition("@")
+        idx = ai.resolve_index(sdk, tag, args.api_index)
+        if idx:
+            print(f"java: API index {idx} (pinning milvus-sdk-java to {tag})")
+            for i, b in enumerate(blocks):
+                unknown = ai.check_code(idx, "java", b, sdk)
+                if unknown:
+                    print(f"java: block {i}: {len(unknown)} unknown SDK call(s)")
+                    for expr, sym in unknown[:10]:
+                        print(f"      {sym}  (from {expr!r})")
+        else:
+            print(f"java: WARN no API index for {sdk}@{tag} — skipping API pre-check")
 
     first_imports = []
     bodies = []
@@ -95,11 +122,15 @@ def main():
     prog += "    }\n}\n"
 
     os.makedirs(SRC, exist_ok=True)
-    try:
-        ver = latest_version()
-    except Exception as e:
-        print(f"java: could not resolve latest milvus-sdk-java from Maven Central ({e}) — SKIPPING java verification")
-        sys.exit(0)
+    if args.sdk_tag:
+        # pin to the index tag (no network)
+        ver = args.sdk_tag.partition("@")[2].lstrip("v")
+    else:
+        try:
+            ver = latest_version()
+        except Exception as e:
+            print(f"java: could not resolve latest milvus-sdk-java from Maven Central ({e}) — SKIPPING java verification")
+            sys.exit(0)
     with open(os.path.join(SRC, "RunPage.java"), "w") as f:
         f.write(prog)
     with open(os.path.join(PROJ, "pom.xml"), "w") as f:

@@ -5,10 +5,12 @@ section for the SDK you are working on **before** writing or fixing snippets.
 
 The snippets live in **Feishu documents** (`zilliverse.feishu.cn`); there is no
 local markdown to edit and no hardcoded directory — the user supplies the
-document/table URL each run. SDK repos are
-cloned from GitHub into `sdk-tmp/sdks/<repo>/` (gitignored) by **Step 0** —
-never assume a local checkout. Ground truth for "latest API" is the SDK repo's
-git tags.
+document/table URL each run. **Step 0** gets the SDK repos as follows: it
+**prefers the local checkout** at `$HOME/work/git-go/<repo>` when one exists
+(tags are usually already present, so no clone and often no network fetch), and
+only falls back to cloning from GitHub into the gitignored
+`sdk-tmp/sdks/<repo>/` when no local checkout is available. Ground truth for
+"latest API" is the SDK repo's git tags.
 
 > **⚠️ Source of truth is the Feishu documents, NOT web-content.** The
 > `web-content/v3.0.x/site/en/userGuide/` markdown files are **downstream
