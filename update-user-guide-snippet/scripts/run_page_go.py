@@ -17,7 +17,7 @@ REPO = os.path.dirname(os.path.dirname(os.path.dirname(os.path.realpath(__file__
 PROJ = os.path.join(REPO, "sdk-tmp", "snippet-run", "go")
 GO = os.environ.get("GO_BIN", "/usr/local/go/bin/go")
 
-GO_MOD = "module snippet-run\n\ngo 1.24.7\n\n"
+GO_MOD = "module snippet-run\n\ngo 1.24.9\n\n"
 
 
 def main():
@@ -61,7 +61,7 @@ def main():
         bodies.append("\n".join(kept))
     # guide go snippets carry no imports — add the standard ones (by path)
     default_imports = [
-        'milvusclient "github.com/milvus-io/milvus/client/v2/milvusclient"',
+        'milvusclient "github.com/milvus-io/milvus/client/v3/milvusclient"',
         '"context"',
         '"log"',
     ]
@@ -120,7 +120,7 @@ def main():
 
     print(f"go blocks: {len(blocks)}")
     r = subprocess.run(
-        [GO, "-C", PROJ, "get", "github.com/milvus-io/milvus/client/v2@latest"],
+        [GO, "-C", PROJ, "get", "github.com/milvus-io/milvus/client/v3@latest"],
         capture_output=True,
         text=True,
     )

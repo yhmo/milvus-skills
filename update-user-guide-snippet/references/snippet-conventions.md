@@ -4,6 +4,13 @@ Per-SDK conventions for writing user-guide code snippets. Read the relevant
 sections before drafting or fixing a snippet. The pymilvus block is always the
 logic reference — translate its operation flow, keep the sub-step numbering.
 
+> **⚠️ Feishu is the source; web-content is a downstream export.** The
+> `web-content/v3.0.x/site/en/userGuide/` markdown files are generated from the
+> Feishu documents, not the other way around. Never let web-content dictate an
+> SDK version or API choice — it lags the Feishu source. Write every snippet
+> against the **latest SDK version** (latest git tag per SDK in `sdk-map.md`).
+
+
 ## Writing into Feishu documents (code-block XML)
 
 Snippets are stored as `<pre lang="..."><code>...</code></pre>` blocks inside
@@ -75,22 +82,23 @@ Snippets are stored as `<pre lang="..."><code>...</code></pre>` blocks inside
 
 - Init:
 
-  ```go
-  import "github.com/milvus-io/milvus/client/v2/milvusclient"
-  cli, err := milvusclient.New(ctx, &milvusclient.ClientConfig{
-      Address: "http://localhost:19530",
-      APIKey:  "root:Milvus",
-  })
-  ```
+```go
+import "github.com/milvus-io/milvus/client/v3/milvusclient"
+cli, err := milvusclient.New(ctx, &milvusclient.ClientConfig{
+    Address: "http://localhost:19530",
+    APIKey:  "root:Milvus",
+})
+```
 
   Note: the constructor takes `*ClientConfig`, not a plain `Config` struct —
   match the real type.
 
 - Operations use option builders: `cli.CreateCollection(ctx,
   milvusclient.NewCreateCollectionOption("name", schema))`. The module lives in
-  `client/` inside `milvus-io/milvus`; verify against the latest `client/vX.Y.Z`
+  `client/` inside `milvus-io/milvus`; verify against the latest `client/v3.x`
   tag (see `.skills/update-user-guide-snippet/references/sdk-map.md` for the Go
-  specifics).
+  specifics). Use the `client/v3` module path for 3.0 guide snippets — the
+  `client/v2` path is the 2.6 line.
 
 ## milvus-sdk-cpp — `cpp` (usually the missing SDK to add)
 

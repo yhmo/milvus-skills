@@ -10,6 +10,15 @@ cloned from GitHub into `sdk-tmp/sdks/<repo>/` (gitignored) by **Step 0** —
 never assume a local checkout. Ground truth for "latest API" is the SDK repo's
 git tags.
 
+> **⚠️ Source of truth is the Feishu documents, NOT web-content.** The
+> `web-content/v3.0.x/site/en/userGuide/` markdown files are **downstream
+> exports** derived from the Feishu documents — the Feishu docs are the source.
+> Never use web-content to judge whether a snippet is current or correct: it
+> routinely lags (e.g. it can still import `milvus/client/v2` while the Feishu
+> source is already on `client/v3`). When updating Feishu snippets, always write
+> against the **latest SDK version** (latest git tag per SDK below), regardless
+> of what any web-content export shows.
+
 ## pymilvus
 
 - **SDK repo**: `pymilvus` (clone → `sdk-tmp/sdks/pymilvus/`)
@@ -51,10 +60,13 @@ git tags.
   `sdk-tmp/sdks/milvus/`).
 - **Snippet language**: `go`
 - **Public API surface**: `client/` (module
-  `github.com/milvus-io/milvus/client/v2`; the guide snippets import
-  `milvusclient "github.com/milvus-io/milvus/client/v2/milvusclient"`)
-- **Tags**: `client/vX.Y.Z` (e.g. `client/v2.6.5`); pre-releases carry a suffix
-  (`client/v3.0.0-beta`). Constructor takes `*ClientConfig`.
+  `github.com/milvus-io/milvus/client/v3` for the 3.0 line; the guide snippets
+  import `milvusclient "github.com/milvus-io/milvus/client/v3/milvusclient"`).
+  The `client/v2` module path is the 2.6 line only — do not use it in 3.0
+  guide snippets.
+- **Tags**: `client/vX.Y.Z` (e.g. `client/v3.0.0`; the 2.6 line is
+  `client/v2.6.5`); pre-releases carry a suffix (`client/v3.0.0-beta`).
+  Constructor takes `*ClientConfig`.
 - **Verify**: `git -C sdk-tmp/sdks/milvus show <tag>:client/milvusclient/collection.go`
 
 ## milvus-sdk-cpp

@@ -35,7 +35,7 @@ For architecture or implementation work, normally read both `technical-details.m
 
 1. Run `scripts/api-trace.sh SYMBOL` from the milvus repo root (`SYMBOL` can be a route, e.g. `search`, or a handler,
    e.g. `handleSearch`).
-2. Find the route string in `constant.go` (v2 category + action constants) or `handler_v1.go` (`Vector*Path` constants),
+2. Find the route string in `constant.go` (both the v2 category + action constants and the v1 `Vector*Path` constants),
    then its registration in `RegisterRoutesToV2`/`RegisterRoutesToV1`.
 3. Note the middleware chain applied at registration: DQL endpoints (query/get/search/advanced_search/hybrid_search) pass
    `dqlAdmission`; entity data ops pass `restfulSizeMiddleware`; every v2 route passes `timeoutMiddleware` + `wrapperPost`.

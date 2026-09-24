@@ -37,13 +37,13 @@ For architecture or implementation work, normally read both `technical-details.m
 1. Run `scripts/api-trace.sh SYMBOL` from the repository root.
 2. Trace the public method in `MilvusClient` (`milvus/MilvusClient.ts`) or a domain module under `milvus/grpc/` through validation, protobuf conversion, and the `promisify` RPC dispatch (`milvus/utils/Function.ts`) that acquires a client from the `generic-pool` channel pool.
 3. Note where retry (`getRetryInterceptor`), global-cluster failover (`setPoolFailoverHandler`), and telemetry (`withTelemetryLogicalOperation`) wrap the call.
-4. For HTTP paths, trace the equivalent method in `milvus/http/Domain.ts` which calls `POST`/`GET` on `HttpBaseClient`.
+4. For HTTP paths, trace the equivalent factory method in the relevant `milvus/http/<Domain>.ts` module (per-entity files such as `Collection.ts`, `Database.ts`, `Vector.ts`) which calls `POST`/`GET` on `HttpBaseClient`.
 5. Verify branch-specific behavior from source; do not assume `main` behavior exists on maintenance branches.
 
 ### Diagnose or change code
 
 1. Identify whether the path is the gRPC `MilvusClient` hierarchy, the HTTP `HttpClient` mixin, shared utils/types, BulkWriter, or telemetry.
-2. Put domain behavior in the owning `milvus/grpc/Domain.ts` module (classes are chained by inheritance) or `milvus/http/Domain.ts` (functions are mixed in).
+2. Put domain behavior in the owning `milvus/grpc/<Domain>.ts` module (per-class files; classes are chained by inheritance, e.g. the `Index` class lives in `MilvusIndex.ts`) or a `milvus/http/<Domain>.ts` factory mixin (functions are mixed into `HttpClient`).
 3. Keep request/response TypeScript types in `milvus/types/` and shared conversion helpers in `milvus/utils/`.
 4. Do not hand-edit `milvus/proto-json/*.ts`; regenerate them when `proto/` changes.
 5. Update focused tests beside the affected area (`test/grpc`, `test/http`, `test/utils`). Use server-backed tests only when real Milvus behavior is required.

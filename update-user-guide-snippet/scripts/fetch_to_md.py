@@ -29,8 +29,12 @@ CODE_RE = re.compile(r'^<code>(.*)</code>$', re.S)
 LANG_TAG = {
     "Python": "python", "Java": "java", "JavaScript": "javascript",
     "Go": "go", "Bash": "bash", "C++": "cpp", "Rust": "rust",
-    "Shell": "bash", "XML": "xml",
+    "XML": "xml",
 }
+
+# `Shell` (the `zilliz` CLI) is a Zilliz Cloud CLI, not an SDK block: the skill
+# leaves it alone entirely, so it is dropped from the extracted page (never run).
+IGNORED = {"Shell"}
 
 
 def normalize_lang(lang: str) -> str:
@@ -73,13 +77,20 @@ def main():
 
     with open(args.out, "w") as f:
         for i, (lang_raw, body) in enumerate(blocks):
+            if lang_raw in IGNORED:
+                continue
             lang = normalize_lang(lang_raw)
             code = decode_block(body)
             f.write(f"```{lang}\n{code}\n```\n\n")
 
-    print(f"=== {args.doc}: wrote {len(blocks)} code blocks to {args.out} ===")
+    written = [b for b in blocks if b[0] not in IGNORED]
+    print(f"=== {args.doc}: wrote {len(written)} code blocks to {args.out} "
+          f"(ignored {len(blocks) - len(written)} Shell/zilliz CLI blocks) ===")
     for i, (lang_raw, _) in enumerate(blocks):
-        print(f"  [{normalize_lang(lang_raw)}] block {i}")
+        if lang_raw in IGNORED:
+            print(f"  [{lang_raw}] block {i}: ignored (zilliz CLI)")
+        else:
+            print(f"  [{normalize_lang(lang_raw)}] block {i}")
 
 
 if __name__ == "__main__":

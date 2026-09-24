@@ -1,6 +1,6 @@
 ---
 name: weekly-report-generator
-description: Generates a weekly engineering report / 周报 in Markdown with exactly these sections: Time, Summary, Work items, and Plan for next week. Use when the user asks to draft, update, or polish a weekly report, summarize this week’s work, turn tasks/PRs into a status report, or asks in Chinese for 周报、本周周报、上周周报、工作总结、PR 周报、下周计划.
+description: Generates a weekly engineering report / 周报 in Markdown with exactly these sections: Time, Summary, Work items, and Plan for next week. After generating, automatically publishes the report into a Feishu (飞书) wiki document following the hierarchy "root page → YYYYMMDD (Friday) sub-doc → <user name> sub-doc", and returns the published link. Use when the user asks to draft, update, or polish a weekly report, summarize this week’s work, turn tasks/PRs into a status report, or asks in Chinese for 周报、本周周报、上周周报、工作总结、PR 周报、下周计划.
 ---
 
 # Weekly Report Generator
@@ -16,9 +16,20 @@ Save the report as a Markdown file:
 - Default directory: `/tmp`
 - If user provides a path, save to that path instead
 
+Publish the finished report to Feishu automatically when the user provides a Feishu wiki URL. The target page hierarchy is:
+
+```
+<root wiki node>                 e.g. https://zilliverse.feishu.cn/wiki/<token>  (title e.g. "Milvus I 周报")
+└── YYYYMMDD/                    title = Friday of the current ISO week, e.g. "20260925"
+    └── <user name>              title = the user's lark `name` field, verbatim
+```
+
+The weekly report is written into the `<user name>` page, and the page URL is returned to the user.
+
 Platform support:
 - The bundled `scripts/scan_weekly_prs.sh` supports both Linux and macOS.
 - Requirements: `gh` and `python3`.
+- Feishu publishing requires the `lark-cli` binary and an active user login (see Prerequisites).
 
 ## Output format
 Always return Markdown.
@@ -95,15 +106,38 @@ Once gh is installed, users must authenticate:
 gh auth login
 ```
 
+### Feishu publishing prerequisites (required only when publishing to Feishu)
+
+**CRITICAL: publishing the report to Feishu requires the `lark-cli` binary and a logged-in user session.** Before publishing, load these skills (by name, via the skill loader) and follow their instructions:
+- `lark-shared` — auth/scope handling (MUST read first)
+- `lark-wiki` — wiki node lookup/create (`+node-list`, `+node-create`)
+- `lark-doc` — document write (`docs +update`)
+
+Preflight:
+```bash
+command -v lark-cli
+lark-cli auth status --format json
+```
+
+- If `lark-cli` is missing, inform the user that Feishu publishing needs it installed (skip publishing but still save the report file).
+- If the session is not logged in, ask the user to run `lark-cli auth login` (per `lark-shared`) before publishing.
+- Always use `--as user` for wiki and doc operations (wiki pages are user resources; the bot identity lacks the required scopes).
+
+A target root wiki URL (`.../wiki/<token>`) must be available:
+- If the user provided a Feishu wiki URL in the request, use it.
+- If not, ask the user for the root wiki URL to publish into; if they do not want to publish, skip Step 8 and just save the file.
+
 ## How to trigger this skill
 Use prompts such as:
 - "Generate this week's weekly report."
 - "Draft a weekly engineering report from my PRs."
 - "Create/update my weekly report and save it to /tmp."
+- "Generate this week's weekly report and publish it to the Feishu wiki https://zilliverse.feishu.cn/wiki/<token>"
 - "Use t1=2026-05-23T15:00:00Z, t2=2026-05-30T15:00:00Z, github account yhmo, then generate report."
 
 Chinese prompts can trigger this skill too, for example:
 - "帮我生成本周周报。"
+- "生成周报并发布到飞书文档 https://zilliverse.feishu.cn/wiki/<token>"
 - "根据我这周的 PR 生成 weekly report。"
 - "总结这周的工作，生成包含 Summary、Work items 和 Plan for next week 的周报。"
 - "使用 t1=2026-05-23T15:00:00Z，t2=2026-05-30T15:00:00Z，GitHub 账号 yhmo，生成周报。"
@@ -252,6 +286,71 @@ If auto-trigger does not happen, explicitly ask:
 - Report the final file path after the full report content.
 - Never say a file is saved unless the verification commands pass.
 
+### Step 8: Publish report to Feishu (automatic when a wiki URL is given)
+
+> **⚠️ HARD RULE (top priority):** This skill may **ONLY ADD** content to the Feishu document. It must **NEVER delete, replace, or overwrite anything** that already exists in the document. Only `docs +update --command append` / `block_insert_after` may be used. `overwrite`, `block_delete`, `block_replace`, and `str_replace` are forbidden on the Feishu document.
+
+After the report file is saved and verified, publish it to Feishu automatically. Follow this hierarchy (also read the root page itself if it documents its own instructions — for example the `Milvus I 周报` page instructs `root → YYYYMMDD → <user name>` and defines update semantics):
+
+1. **Resolve the root wiki node.** Extract the `<token>` from the user-provided `.../wiki/<token>` URL, then:
+   ```bash
+   lark-cli wiki spaces get_node --params '{"token":"<wiki_token>"}' --format json --as user
+   ```
+   Record `data.node.space_id` and `data.node.node_token`.
+
+2. **Compute the date node title `YYYYMMDD`.** It is the Friday of the current ISO week (upcoming Friday on Mon–Fri, most recent past Friday on Sat–Sun). Run (uses GNU date; the formula is verified on Linux):
+   ```bash
+   date -d "$(date +%F) + $((5 - $(date +%u))) days" +%Y%m%d
+   ```
+   If the user's report window maps to a different Friday than the current week, use the Friday that ends the report window instead and note the choice.
+
+3. **Get the user's lark name:**
+   ```bash
+   lark-cli contact +get-user --format json --as user
+   ```
+   Record `data.user.name` (e.g. `莫毅华 (Michael Mo)`). This is the personal page title, verbatim.
+
+4. **Find or create the `YYYYMMDD` node** under the root node:
+   ```bash
+   lark-cli wiki +node-list --space-id <space_id> --parent-node-token <root_node_token> --format json --as user
+   ```
+   Match a child whose `title == <YYYYMMDD>`. **If missing, create it automatically — do not stop or ask the user** (it is a low-risk additive write):
+   ```bash
+   lark-cli wiki +node-create --parent-node-token <root_node_token> --title "<YYYYMMDD>" --format json --as user
+   ```
+   Record the date node's `node_token`.
+
+5. **Find or create the personal node** under the date node. List its children (same `+node-list` command with the date node as parent). Match a child whose `title == data.user.name`; if there is no exact match, fuzzy-match on the short name (the substring before ` ` in `<name> (<en name>)`). **If still absent, create it automatically — do not stop or ask the user:**
+   ```bash
+   lark-cli wiki +node-create --parent-node-token <date_node_token> --title "<user name>" --format json --as user
+   ```
+   Record `data.obj_token` (the docx token) and `data.node_token`.
+
+6. **Write the report into the personal docx.** The publish content is exactly the content of the report file saved in Step 7 (`[final output path]`). Use Markdown format. Pass the content via stdin heredoc to avoid shell-escaping issues; if the report file is under the current working directory you may also use `--content @<relative-path>`, otherwise prefer stdin.
+
+   **HARD RULE — only add, never delete.** Whatever the state of the page, this skill must never delete, replace, or remove any existing content in the Feishu document:
+   - Only use `docs +update --command append` (or `block_insert_after` to insert new blocks after an anchor). Both only add content and never touch existing blocks.
+   - Never use `--command overwrite` (clears the whole document), `block_delete`, `block_replace`, or `str_replace` (these delete or overwrite existing content) on the Feishu document.
+   - This overrides any "replace" semantics documented in the root page (e.g. `Milvus I 周报`'s "Summary → replace / Plan → replace"): even then, do not replace — append instead.
+
+   ```bash
+   # New/empty page, or page already has content: always append (only-add)
+   # Content = the exact markdown written to [final output path] in Step 7
+   lark-cli docs +update --doc <obj_token> --command append --doc-format markdown --content - <<'EOF'
+   <content of the saved report file, verbatim>
+   EOF
+   ```
+   - On a brand-new empty page, appending writes the full report as its content.
+   - If the page already has content this week, append the report at the end without modifying existing content. Inform the user that content was appended (never replaced), so they can clean up any duplicate sections manually if needed.
+   - If `--content @<file>` is used instead of stdin, the file must be a relative path under the current working directory (`@/absolute/path` is rejected).
+
+7. **Verify and report.**
+   - Confirm the write: `lark-cli docs +fetch --doc <obj_token>` (content matches the report).
+   - Build the published page URL from the root URL base: `<root_url_base>/wiki/<personal_node_token>` (e.g. `https://zilliverse.feishu.cn/wiki/<personal_node_token>`).
+   - Include this URL in the assistant response together with the full report content and the saved file path.
+
+If the user did not provide a wiki URL, skip this step and only save the file.
+
 ## Rules
 - Keep the four section titles exactly as specified.
 - Section order is mandatory: `## Time`, `## Summary`, `## Work items`, `## Plan for next week`.
@@ -262,6 +361,14 @@ If auto-trigger does not happen, explicitly ask:
 - Prefer concrete deliverables over vague statements.
 - Never overwrite an existing file unless user explicitly asks.
 - Filename format is mandatory: `weekly-report-[utc date].md` using UTC date from `date -u +%F`.
+- Publishing rules:
+  - Publish automatically after saving whenever the user provided a Feishu wiki URL.
+  - Ask for the root wiki URL if it is missing and the user wants publishing.
+  - Use `--as user` for all Feishu wiki/doc operations.
+  - Date node title is the `YYYYMMDD` Friday of the current ISO week (computed via the shell command in Step 8); personal node title is the user's lark `name` verbatim.
+  - If the `YYYYMMDD` date node or the personal node is missing, create it automatically with `wiki +node-create` (additive, low-risk) — never block publishing waiting for user confirmation on creation.
+  - **Never delete, replace, or overwrite any existing content in the Feishu document — only add.** Forbidden commands on the Feishu document: `overwrite`, `block_delete`, `block_replace`, `str_replace`. Only `docs +update --command append` / `block_insert_after` are allowed. This is a hard rule that overrides any root-page "replace" semantics.
+  - Never delete or overwrite another person's page; only create/update the current user's own page.
 
 ## Quality checks before returning
 - Section titles and order are correct.
@@ -275,3 +382,9 @@ If auto-trigger does not happen, explicitly ask:
 - Output directory follows default `/tmp` or user-provided override.
 - Filename matches `weekly-report-[utc date].md` from `date -u +%F`.
 - Final saved file path is included in the response.
+- If a Feishu wiki URL was provided:
+  - `lark-cli` is available and logged in (`lark-cli auth status`).
+  - The `YYYYMMDD` date node (Friday of the current ISO week) exists under the root node (auto-created via `wiki +node-create` if it was missing).
+  - The personal `<user name>` node exists under the date node (auto-created if missing) and contains the report.
+  - Only additions were made to the Feishu document — no existing content was deleted, replaced, or overwritten (report content was appended via `docs +update --command append`).
+  - The published page URL is included in the response and the write was verified with `docs +fetch`.

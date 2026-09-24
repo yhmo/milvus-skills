@@ -41,6 +41,11 @@ PRE_RE = re.compile(r'<pre\s+id="[^"]*"(?:\s+[^>]*?)lang="([^"]*)"[^>]*>(.*?)</p
 CODE_RE = re.compile(r'^<code>(.*)</code>$', re.S)
 
 
+# Languages intentionally not checked: `Shell` (the `zilliz` CLI) is a Zilliz
+# Cloud CLI, not an SDK block, and the skill leaves it alone entirely.
+IGNORED = {"shell"}
+
+
 def normalize_lang(lang: str) -> str:
     return {
         "Python": "python", "Java": "java", "JavaScript": "javascript",
@@ -92,6 +97,9 @@ def main():
     results = []
     for i, (lang_raw, body) in enumerate(blocks):
         lang = normalize_lang(lang_raw)
+        if lang in IGNORED:
+            results.append((i, lang_raw, "skipped (ignored lang)", True))
+            continue
         if lang not in LANGS:
             results.append((i, lang_raw, "skipped (unknown lang)", True))
             continue

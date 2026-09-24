@@ -151,10 +151,17 @@ Updating a document WITHOUT the corresponding SDK skill risks API deviations
   1. Inspect the URL to learn its type and token:
      `lark-cli drive +inspect --url <url> --as user`. A `wiki/` URL unwraps to
      either a `docx` (a document) or a `bitable` (a directory table).
-  2. **Directory table (bitable)** → list its records to find the link column:
-     `lark-cli base +record-list --base-token <token> --table-id <tbl...>
-     --limit 200 --as user`. Each record's link field (often named `Doc` or
-     similar) is `[Title](wiki-url)`.
+     **Pass through the `?table=...&view=...` query parameters.** The wiki URL
+     often carries `?table=<tableId>&view=<viewId>` — that table/view is what
+     the user is actually looking at in the Feishu UI. Capture both values and
+     use them below; never drop them, or the record set/order may not match what
+     the user sees.
+  2. **Directory table (bitable)** → list its records to find the link column,
+     **honoring the URL's table and view** so the record set, filtering, and
+     ordering match the user's view:
+     `lark-cli base +record-list --base-token <token> --table-id <tableId>
+     --view-id <viewId> --limit 200 --as user`. Each record's link field (often
+     named `Doc` or similar) is `[Title](wiki-url)`.
   3. **Document (docx)** → fetch its content and collect the wiki links in its
      body: `lark-cli docs +fetch --doc <docx> --as user`, then scan for
      `https://.../wiki/...` links.
@@ -166,7 +173,12 @@ Updating a document WITHOUT the corresponding SDK skill risks API deviations
      outline-less documents with no `<pre>` are skipped and reported). Do NOT
      create code in empty documents unless the user explicitly asks.
   - "only the collections docs", "just the Search page", etc. narrow the scope
-    by title/ID as named by the user.
+    by title/ID as named by the user. When the user names a page by its position
+    in the table they shared ("第 3 个页面" / "the 3rd page"), resolve it from
+    the **view-ordered** record list (step 2), not the table's default order —
+    the UI and `--view-id` share one ordering, while a bare `record-list`
+    without `--view-id` returns a different (creation) order. If in doubt,
+    confirm which page the user means by title before editing.
 - **Document ↔ wiki link mapping**: every directory entry points to a Feishu
   wiki node. `lark-cli drive +inspect --url <wiki_url> --as user` unwraps it to
   the underlying `docx` token; use that token for all `docs +fetch` / `docs
@@ -200,7 +212,10 @@ Updating a document WITHOUT the corresponding SDK skill risks API deviations
   When writing a new group, add blocks in this order. When a language's block
   already exists, keep it in its canonical slot (reorder existing blocks if
   needed, using `block_move_after`). This gives readers a consistent
-  cross-SDK reading order.
+  cross-SDK reading order. **After finishing snippet work (syntax, consistency,
+  and any real-run), verify the order with
+  `scripts/check_block_order.py` on the fetched document and reorder any
+  group that deviates** (see Step 4 and Step 6).
 
   A **`<synced-source>` container** (or a section with multiple standalone SDK
   blocks) signals the author intends a multi-SDK section — so a missing
@@ -391,26 +406,79 @@ Updating a document WITHOUT the corresponding SDK skill risks API deviations
        other language should too — Java `databaseName(...)` and C++
        `WithDatabaseName(...)` shortcuts that skip the explicit "use database"
        step are a divergence to flag);
-     - **equivalent API choice** — same logical operation mapped to each SDK's
-       idiom, not a different operation (e.g. switching database vs. passing the
-       db name inline);
-     - **naming** — same collection/database/field names across languages.
- 5. **Run the snippets for real (ONLY when the user explicitly asks, e.g. "在
-    Milvus server 上真实运行").** This step is NOT part of the default check —
-    it runs only when the request explicitly asks to execute against a Milvus
-    server (see Usage). It does NOT start a Milvus server itself. First extract
-    the edited document's code blocks into a local markdown file that the
-    bundled runners consume:
-    - Fetch the whole document (`docs +fetch --doc <docx> --detail with-ids`),
-      extract each `<pre lang="...">` block, undo the XML escaping, and emit a
-      temporary page file in the exact shape the runners expect (fenced
-      ```lang blocks in document order), e.g.
-      `scripts/fetch_to_md.py <docx> --out sdk-tmp/snippet-run/<doc>.md`.
-    - **Probe** whether a Milvus server is reachable first:
-      `python3 -c "from pymilvus import connections; connections.connect(host='localhost', port=19530, token='root:Milvus'); connections.disconnect('default')"`
-      or probe the REST health endpoint `curl -s http://localhost:9091/healthz`.
-    - **Server reachable** → run the edited page's snippets per SDK via the
-      bundled runners in `scripts/`:
+      - **equivalent API choice** — same logical operation mapped to each SDK's
+        idiom, not a different operation (e.g. switching database vs. passing the
+        db name inline);
+      - **operational parity** — the set of API calls and their input arguments
+        must match the Python baseline **item for item**, including **count** and
+        **parameters**. Example: if Python creates 2 indexes (`embedding` +
+        `product_name`), every other language must also create those same 2
+        indexes with the same field names / metric types — a language that
+        creates only 1 index is a divergence to fix. Also compare the argument
+        set of each call (field names, metric_type, index_type, limit, etc.)
+        against the Python block, not just the call's presence;
+      - **missing capability → comment, never omit silently.** If a language's
+        SDK does NOT implement a specific call or a specific parameter/option that
+        the Python block uses, do NOT silently drop the call or the argument —
+        keep the block complete and add a comment in that language's syntax
+        (e.g. `// Note: ... not supported in milvus-sdk-java as of vX.Y.Z`)
+        stating the SDK has not implemented it. Record it in the report too;
+      - **naming** — same collection/database/field names across languages.
+   - **Block order check — every group must follow the canonical SDK order.**
+     For every multi-SDK group (a `<synced-source>` container, or a run of
+     sibling `<pre>` blocks in one section), the languages must appear in the
+     canonical order `Python → Java → Go → Rust → C++ → JavaScript → Bash`,
+     and the group must not silently drop a language the doc's other groups
+     have. Standalone single-language blocks (FAQ answers) are exempt. Run the
+     bundled `scripts/check_block_order.py` on the fetched document:
+
+     ```bash
+     lark-cli docs +fetch --doc <docx> --detail with-ids --as user \
+       | python3 scripts/check_block_order.py --doc "<Doc Title>"
+     ```
+
+     It prints each group's actual language order and reports OUT OF ORDER /
+     missing languages. **Fix order with `docs +update --command block_move_after`
+     (move `JavaScript`+`Bash` after `C++`, then `Rust` after `Go`) and re-run
+     until 0 failures.** Never leave a group out of canonical order.
+  5. **Run the snippets for real (ONLY when the user explicitly asks, e.g. "在
+     Milvus server 上真实运行").** This step is NOT part of the default check —
+     it runs only when the request explicitly asks to execute against a Milvus
+     server (see Usage). It does NOT start a Milvus server itself.
+     - **Cloud docs (placeholder endpoints) — substitute localhost, don't touch
+       the doc.** If the document's snippets use placeholder/cloud endpoints
+       (`https://{cluster-id}.{region}.vectordb.zillizcloud.com:19530`,
+       `https://api.cloud.zilliz.com`) or placeholder credentials
+       (`YOUR_ZILLIZ_API_KEY`, `inxx-xxxxxxxxxxxxxxxxxxx`,
+       `YOUR_STORAGE_ACCESS_KEY`), rewrite those endpoints to
+       `http://localhost:19530` (and token to `root:Milvus`) **only in the
+       local verification copy** so the snippets actually run against the local
+       Milvus — **never change the document's placeholders**. Report this
+       substitution in the summary. Never ask the user for real cloud
+       credentials.
+     - **Features that cannot be real-run (skip them, but still verify their
+       API statically in Step 4).** These need external resources that cannot be
+       simulated locally, so their code blocks are NOT executed; note the skip in
+       the report:
+       - **Bulk import** (`bulk_import` / `BulkImport` / `createImportJobs` /
+         `jobs/import/*`) — needs data files in S3/external storage.
+       - **CDC / change-data-capture** related APIs.
+       - **FileResource** related APIs.
+       - **ExternalTable** related APIs.
+     - First extract the edited document's code blocks into a local markdown
+       file that the bundled runners consume:
+     - Fetch the whole document (`docs +fetch --doc <docx> --detail with-ids`),
+       extract each `<pre lang="...">` block, undo the XML escaping, and emit a
+       temporary page file in the exact shape the runners expect (fenced
+       ```lang blocks in document order), e.g.
+       `scripts/fetch_to_md.py <docx> --out sdk-tmp/snippet-run/<doc>.md`.
+       Apply the localhost substitution (above) to this extracted copy before
+       running.
+     - **Probe** whether a Milvus server is reachable first:
+       `python3 -c "from pymilvus import connections; connections.connect(host='localhost', port=19530, token='root:Milvus'); connections.disconnect('default')"`
+       or probe the REST health endpoint `curl -s http://localhost:9091/healthz`.
+     - **Server reachable** → run the edited page's snippets per SDK via the
+       bundled runners in `scripts/`:
 
       ```bash
       # python (pymilvus) — logic baseline
@@ -453,6 +521,9 @@ Updating a document WITHOUT the corresponding SDK skill risks API deviations
  6. **Validate** before reporting done:
    - every section has the full SDK set the document claims (tabs vs blocks
      match);
+   - every multi-SDK group is in canonical order — run
+     `scripts/check_block_order.py` on the final fetch and confirm 0 failures
+     (see Step 4);
    - imports/client init in each snippet are consistent with the latest API;
    - sub-step numbering matches across SDKs in the same section;
    - snippets are syntactically plausible (balanced braces/parens, no stray
@@ -482,9 +553,12 @@ the wiki space. Implications:
 - Documents use `<synced-source>` containers with up to six `<pre>` blocks
   (`Python`, `Java`, `JavaScript`, `Go`, `Bash`, `C++`). The block ids and
   `lang` values come from `docs +fetch --detail with-ids`.
-- The Feishu docs correspond to the web-content userGuide pages (see
-  `/home/myh/work/git-go/web-content/v3.0.x/site/en/userGuide/`), which can be
-  cross-referenced when a section's intent is unclear, but the Feishu
-  documents are the source of truth for what is actually published.
+- The Feishu documents are the **source of truth**: the web-content userGuide
+  pages (see
+  `/home/myh/work/git-go/web-content/v3.0.x/site/en/userGuide/`) are generated
+  **from** the Feishu docs, so they routinely lag behind them. Do **not** use
+  web-content to judge snippet correctness or which SDK version to write
+  against — always write against the **latest SDK version** (latest git tag in
+  `references/sdk-map.md`), independent of any web-content export.
 - Per-SDK client-init and common-operation patterns live in
   `references/snippet-conventions.md`.
