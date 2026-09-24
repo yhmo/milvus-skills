@@ -92,7 +92,7 @@ def main():
         '"log"',
     ]
     for imp in default_imports:
-        p = imp.split()[-1]
+        p = imp.split()[-1].strip('"')
         if p not in import_paths:
             import_paths.add(p)
             imports.append(imp)

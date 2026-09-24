@@ -545,7 +545,8 @@ Updating a document WITHOUT the corresponding SDK skill risks API deviations
       python3 scripts/run_page_java.py <extracted.md> [--api-index sdk-tmp/api-index --sdk-tag java@v3.0.10]
       # rust (resolves the latest milvus-sdk-rust version from crates.io)
       python3 scripts/run_page_rust.py <extracted.md> [--api-index sdk-tmp/api-index --sdk-tag rust@v3.0.2]
-      # cpp (uses a prebuilt milvus-sdk-cpp binary from default-conan-local2)
+      # cpp (uses a prebuilt milvus-sdk-cpp binary from default-conan-local2,
+      #     falling back to the GitHub releases page)
       python3 scripts/run_page_cpp.py <extracted.md> [<version>] [--api-index sdk-tmp/api-index --sdk-tag cpp@v3.0.3]
       ```
 
@@ -556,12 +557,19 @@ Updating a document WITHOUT the corresponding SDK skill risks API deviations
       compile/run step remains authoritative — unknown-call reports are advisory
       only.
 
-      The cpp runner installs a **prebuilt** `milvus-sdk-cpp/<version>@milvus/dev`
-      binary from the `default-conan-local2` Conan repo with `--build=never`. If
-      a binary matching the version/system exists, the cpp blocks are compiled
-      and run against it; if **no usable prebuilt binary is found, cpp
-      verification is SKIPPED** (reported as skipped — never a hard failure and
-      never a from-source build).
+      The cpp runner uses a **prebuilt** milvus-sdk-cpp binary. It first tries
+      `milvus-sdk-cpp/<version>@milvus/dev` from the `default-conan-local2` Conan
+      repo with `--build=never`; if that yields no binary for the version/system,
+      it **falls back to the GitHub releases page**
+      (`https://github.com/milvus-io/milvus-sdk-cpp/releases/tag/v<version>`),
+      whose **Assets** contain prebuilt binary packages per platform
+      (`libmilvus-<ver>-<arch>-<OS>.[deb|rpm|tar.gz]`). The runner selects the
+      asset matching the current platform (arch + Linux distro / macOS /
+      Windows), downloads it, and extracts `include/` + `lib/` from it. If the
+      cpp blocks compile and run against the binary, verification passes; if
+      **no usable prebuilt binary is found from either source, cpp verification
+      is SKIPPED** (reported as skipped — never a hard failure and never a
+      from-source build).
     - **Go env**: the go runner needs a toolchain satisfying the client module's
       `go.mod` requirement and a reachable module proxy. On this machine use
       `GOTOOLCHAIN=go1.25.8 GOPROXY=https://goproxy.cn,direct` (both cached/

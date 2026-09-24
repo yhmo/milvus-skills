@@ -48,6 +48,11 @@ def pom(version):
       <artifactId>milvus-sdk-java</artifactId>
       <version>{version}</version>
     </dependency>
+    <dependency>
+      <groupId>org.slf4j</groupId>
+      <artifactId>slf4j-api</artifactId>
+      <version>1.7.36</version>
+    </dependency>
   </dependencies>
 </project>
 """

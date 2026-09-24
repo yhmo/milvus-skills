@@ -83,13 +83,27 @@ only falls back to cloning from GitHub into the gitignored
   cloud-REST import — `CreateImportJobs`, `ListImportJobs`,
   `GetImportJobProgress`, `CommitImport`, `AbortImport`; counterparts of
   pymilvus `bulk_import` / `get_import_progress`). No client pool.
-- **Live-run**: use a **prebuilt binary** from the `default-conan-local2` Conan
-  repo (`https://milvus01.jfrog.io/artifactory/api/conan/default-conan-local2`):
-  `conan install --requires="milvus-sdk-cpp/<ver>@milvus/dev" --build=never
-  -s compiler.cppstd=14`. The published binaries are built with **cppstd=14** —
-  match that setting (and compile the snippet with `-std=c++14`). If no prebuilt
-  binary matches the version/system, **skip cpp verification** (report it; never
-  build from source).
+- **Live-run**: use a **prebuilt binary**. Two sources are tried, in order
+  (implemented in `scripts/run_page_cpp.py`):
+  1. the `default-conan-local2` Conan repo
+     (`https://milvus01.jfrog.io/artifactory/api/conan/default-conan-local2`):
+     `conan install --requires="milvus-sdk-cpp/<ver>@milvus/dev" --build=never
+     -s compiler.cppstd=14`. The published binaries are built with **cppstd=14**
+     — match that setting (and compile the snippet with `-std=c++14`).
+  2. the **GitHub releases** page
+     (`https://github.com/milvus-io/milvus-sdk-cpp/releases/tag/v<ver>`). The
+     release **Assets** carry prebuilt binary packages for each platform,
+     named `libmilvus-<ver>-<arch>-<OS>.[deb|rpm|tar.gz]` (e.g.
+     `libmilvus-3.0.3-x86_64-Ubuntu_22.04.deb`,
+     `libmilvus-3.0.3-arm64-macOS_15.tar.gz`,
+     `libmilvus-3.0.3-AMD64-Windows.tar.gz`). The runner queries the release
+     assets (preferring the authenticated `gh api` over anonymous urllib),
+     picks the asset matching the current platform (arch + Linux distro /
+     macOS / Windows), downloads it, and extracts `include/` + `lib/` from the
+     `.deb` (`usr/include`, `usr/lib`) / `.rpm` (`usr/include`, `usr/lib64`)
+     / `.tar.gz` (`<pkg>/include`, `<pkg>/lib` or `<pkg>/bin`).
+  If neither source provides a usable binary for the version/system, **skip
+  cpp verification** (report it; never build from source).
 
 ## milvus-sdk-csharp
 
