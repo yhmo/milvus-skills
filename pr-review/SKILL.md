@@ -126,9 +126,32 @@ Treat every review as exhaustive unless the user explicitly limits the scope. Re
 - Before Step 9, verify that the reviewed path set exactly equals the current PR changed-file set and that aggregate additions/deletions match the authoritative diff. Resolve renames and refresh the PR head before closing the gate.
 - Time is not a stopping condition. Continue across long runs or context compactions until Steps 1-11 and the 100% coverage gate are complete.
 
+### Provider rate-limit concurrency budget
+
+Before starting Step 1, probe the active model provider's per-key request quota and derive a concurrency budget for any subagent delegation. Do this once at the start of the review; reuse the recorded budget if the workflow is resumed.
+
+1. Resolve the provider base URL and API key from the active agent configuration:
+   - codex: read `~/.codex/config.toml` `[model_providers.*]` `base_url` (strip a trailing `/v1`) and `experimental_bearer_token`; if no bearer token is present, read the key from `apiKeys.codexEnvVar` or `OPENAI_API_KEY`.
+   - opencode: read `~/.config/opencode/opencode.json` `provider.*.options.baseURL` and `provider.*.options.apiKey`.
+   - If the key is not directly readable (e.g. injected via `OPENCODE_CONFIG_CONTENT`), print the masked value and use whatever key is active for the run.
+2. Send one minimal probe request and capture response headers:
+   ```bash
+   curl -sS -D - -o /dev/null --max-time 15 "https://<BASE_URL>/chat/completions" \
+     -H "Authorization: Bearer <API_KEY>" -H "Content-Type: application/json" \
+     -d '{"model":"<MODEL_ID>","messages":[{"role":"user","content":"hi"}],"max_tokens":4}'
+   ```
+   Use the actual model ID the review will run with when it is known; otherwise use the provider default.
+3. Read the rate-limit headers from the response (case-insensitive). Primary header for this deployment: `x-ratelimit-api_key-remaining-requests`; also read `x-ratelimit-api_key-limit-requests`. Fallbacks if absent: any `x-ratelimit-*-remaining-requests`, then `x-ratelimit-remaining-requests`. If the response is HTTP 429, treat remaining as `0`.
+4. Compute the concurrency budget: `N = max(1, min(10, floor(remaining / 4)))`, where `remaining` is the per-key remaining request count.
+5. Record `N` in the running review notes, then whenever you delegate work to parallel subagents (e.g. `@general` task fan-out for large PRs), obey this instruction verbatim: **「最多 N 个并发子任务、等前一个完成再开下一个」**, replacing `N` with the computed value.
+6. If the provider headers cannot be obtained, default `N = 2` and proceed; do not block the review on the probe.
+
+Example: `x-ratelimit-api_key-remaining-requests: 29` → `N = min(10, floor(29/4)) = 7` → prompt subagents with 「最多 7 个并发子任务、等前一个完成再开下一个」.
+
 ### Review timing
 
 - Immediately before starting Step 1, record the review start time as Unix epoch seconds with `date +%s` and keep the value in the running review notes.
+- Before starting Step 1, also run the provider rate-limit probe above and record the derived concurrency budget `N` in the running review notes.
 - Immediately after Step 11 finishes, including inline-comment attachment verification or the explicit zero-comment outcome, record the end time with `date +%s` and calculate `elapsed_seconds = end_time - start_time`.
 - Record the canonical PR URL from the PR metadata `html_url` field for the final completion summary.
 - Measure the full wall-clock review duration. Do not estimate the time cost from individual tool-call durations or token usage.
