@@ -2,3 +2,17 @@ __pycache__/
 *.pyc
 *.pyo
 sdk-tmp/
+
+# Rust build artifacts
+target/
+*.rmeta
+*.rlib
+
+# C++ build artifacts
+*.o
+*.a
+*.so
+*.dylib
+
+# Generated temp files
+json-field-pages.md
