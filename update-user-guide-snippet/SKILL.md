@@ -351,6 +351,24 @@ Updating a document WITHOUT the corresponding SDK skill risks API deviations
    client = MilvusClient(uri="http://localhost:19530", token="root:Milvus")</code></pre>'
    ```
 
+   **Normalize blank lines before writing (MANDATORY).** Feishu converts each
+   newline in the payload 1:1 to `<br/>` (an empty line becomes `<br/><br/>`)
+   with no de-duplication — any stray blank line in the payload lands verbatim
+   in the document. Before composing `--content`, run the snippet's plain code
+   text through the bundled normalizer, which removes blank lines between
+   consecutive `import`/`use`/`#include`/`from` statements, blank lines inside
+   data-structure literals, blank lines immediately after an opening `{` or
+   before a closing `}`/`]`/`)`, runs of 2+ blank lines, and leading/trailing
+   blank lines (blank lines that separate logical statements inside `func`/
+   `main`/`if` bodies are preserved):
+
+   ```bash
+   python3 scripts/normalize_snippet.py < snippet.txt > snippet-clean.txt
+   # or: python3 scripts/normalize_snippet.py --file snippet.txt
+   ```
+
+   Use the cleaned text when building the `--content` payload.
+
    Rules for the `--content` payload (see `lark-doc-xml.md` for the full spec):
    - A code block is `<pre lang="<lang>" [caption="..."]><code>…</code></pre>`.
      Keep the block's original `lang` (and `caption`, if the original had one).
@@ -597,6 +615,11 @@ Updating a document WITHOUT the corresponding SDK skill risks API deviations
    - sub-step numbering matches across SDKs in the same section;
    - snippets are syntactically plausible (balanced braces/parens, no stray
      placeholders unless intentional);
+   - no written block has stray blank lines: no blank lines between imports or
+     inside data-structure literals, and no runs of 2+ consecutive blank lines
+     (`<br/><br/>` runs in the fetched `<pre>`). Re-run
+     `scripts/normalize_snippet.py` on any block that still contains them and
+     rewrite it (Step 3);
    - no non-code content was changed.
  7. **Report** a per-document/per-block change list for review, including which
     syntax checks passed/skipped and any unsupported features recorded per SDK.

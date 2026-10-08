@@ -16,3 +16,9 @@ target/
 
 # Generated temp files
 json-field-pages.md
+
+# Debug / temp scratch files (never commit)
+*_debug.*
+*_debug_tmp.*
+*_tmp.*
+*.tmp

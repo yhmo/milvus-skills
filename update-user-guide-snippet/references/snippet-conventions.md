@@ -20,7 +20,14 @@ Snippets are stored as `<pre lang="..."><code>...</code></pre>` blocks inside
 - Keep the block's `lang` (and original `caption`) exactly as fetched.
 - Inside `<code>`, escape XML: `<` → `&lt;`, `>` → `&gt;`, `&` → `&amp;`.
 - Newlines: use real newlines in the `--content` payload (the CLI converts
-  them) or `<br/>` when inlining.
+  them) or `<br/>` when inlining. **There is no blank-line de-duplication** —
+  an empty line in the payload becomes `<br/><br/>` in the stored block.
+  **MANDATORY: run `scripts/normalize_snippet.py` on the plain code text
+  before composing the payload** — it removes blank lines between
+  `import`/`use`/`#include` statements and inside data-structure literals,
+  collapses runs of 2+ blank lines, and trims leading/trailing blank lines
+  (blank lines that separate logical statements inside `func`/`main`/`if`
+  bodies are preserved). Draft freely; the normalizer cleans the result.
 - **Strip `<em>…</em>` emphasis markers** the Feishu renderer wraps around
   identifiers (e.g. `ConnectConfig.<em>builder</em>()`, `[]<em>string</em>`).
   Write plain code text.

@@ -145,7 +145,7 @@ def main():
         f.write(prog)
 
     print(f"go blocks: {len(blocks)}")
-    client_mod = f"github.com/milvus-io/milvus/client/v3@{args.sdk_tag.partition('@')[2]}" if args.sdk_tag else "github.com/milvus-io/milvus/client/v3@latest"
+    client_mod = f"github.com/milvus-io/milvus/client/v3@{args.sdk_tag.partition('@')[2].removeprefix('client/')}" if args.sdk_tag else "github.com/milvus-io/milvus/client/v3@latest"
     r = subprocess.run(
         [GO, "-C", PROJ, "get", client_mod],
         capture_output=True,

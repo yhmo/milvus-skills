@@ -59,7 +59,7 @@ def install_prebuilt(version):
                "--build=never", f"--deployer=full_deploy",
                f"--output-folder={DEPLOY}"] + extra
         r = subprocess.run(cmd, capture_output=True, text=True, env={**os.environ, "CONAN_HOME": CONAN_HOME})
-        if r.returncode == 0:
+        if r.returncode == 0 and os.path.isdir(os.path.join(DEPLOY, "include")) and os.path.isdir(os.path.join(DEPLOY, "lib")):
             return True
     return False
 
