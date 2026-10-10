@@ -9,7 +9,7 @@ Use this skill only for `milvus-io/milvus-sdk-java`.
 
 ## Repository and branch context
 
-- Prefer the current working tree when it is already the Java SDK repository; otherwise locate the repository checkout on this machine (for example `$HOME/work/git-go/milvus-sdk-java`).
+- Locate the repository checkout in this order: `$HOME/work/git-go/milvus-sdk-java` when it exists on this machine; a directory named `milvus-sdk-java` among the parent directories of the current working directory; `/home/runner/work/milvus-sdk-java/milvus-sdk-java` (GitHub Actions runner `$GITHUB_WORKSPACE`).
 - Confirm the checkout with `git rev-parse --show-toplevel`, `git remote -v`, `git branch --show-current`, and `git status --short` before relying on it.
 - Use remote `source` as upstream when it points to `milvus-io/milvus-sdk-java`.
 - Treat `source/master` as the current design baseline. Treat legacy release branches as maintenance lines whose source layout and supported APIs may differ.

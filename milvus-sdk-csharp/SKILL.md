@@ -9,7 +9,7 @@ Use this skill only for `milvus-io/milvus-sdk-csharp`.
 
 ## Repository and branch context
 
-- Prefer the current working tree when it is already inside `milvus-sdk-csharp`; otherwise locate the repository checkout on this machine (for example `$HOME/work/git-go/milvus-sdk-csharp`).
+- Locate the repository checkout in this order: `$HOME/work/git-go/milvus-sdk-csharp` when it exists on this machine; a directory named `milvus-sdk-csharp` among the parent directories of the current working directory; `/home/runner/work/milvus-sdk-csharp/milvus-sdk-csharp` (GitHub Actions runner `$GITHUB_WORKSPACE`).
 - Confirm the checkout with `git rev-parse --show-toplevel`, `git remote -v`, `git branch --show-current`, and `git status --short` before relying on it.
 - Upstream is normally `source` (`milvus-io/milvus-sdk-csharp`); `origin` is usually the user's fork.
 - The active development line is `main`/`master`. Legacy release lines are maintained separately. Confirm the current branch set from Git before assuming API parity.

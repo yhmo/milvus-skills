@@ -10,7 +10,7 @@ language SDK except when comparing behavior.
 
 ## Start every task
 
-1. Resolve the repository root from the current directory; otherwise locate the repository checkout on this machine (for example `$HOME/work/git-go/milvus-sdk-cpp`).
+1. Locate the repository checkout in this order: `$HOME/work/git-go/milvus-sdk-cpp` when it exists on this machine; a directory named `milvus-sdk-cpp` among the parent directories of the current working directory; `/home/runner/work/milvus-sdk-cpp/milvus-sdk-cpp` (GitHub Actions runner `$GITHUB_WORKSPACE`).
 2. Confirm it with `git rev-parse --show-toplevel` and `git remote -v`.
 3. Check `git branch --show-current`, `git status --short`, and the relevant upstream branch before assuming API parity.
 4. Preserve unrelated user changes. Use `apply_patch` for edits.

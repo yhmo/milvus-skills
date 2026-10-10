@@ -10,7 +10,7 @@ or a client SDK except when comparing behavior.
 
 ## Start every task
 
-1. Resolve the repository root from the current directory; otherwise locate the repository checkout on this machine (for example `$HOME/work/git-go/milvus-storage`).
+1. Locate the repository checkout in this order: `$HOME/work/git-go/milvus-storage` when it exists on this machine; a directory named `milvus-storage` among the parent directories of the current working directory; `/home/runner/work/milvus-storage/milvus-storage` (GitHub Actions runner `$GITHUB_WORKSPACE`).
 2. Confirm it with `git rev-parse --show-toplevel` and `git remote -v`. `source` is the upstream `milvus-io/milvus-storage`
    remote; `origin` is usually the user's fork.
 3. Check `git branch --show-current`, `git status --short`, and the relevant upstream branch before assuming behavior.

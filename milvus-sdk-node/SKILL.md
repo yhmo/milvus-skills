@@ -9,7 +9,7 @@ Use this skill only for `milvus-io/milvus-sdk-node` (npm package `@zilliz/milvus
 
 ## Repository and branch context
 
-- Prefer the current working tree when it is already inside `milvus-sdk-node`; otherwise locate the repository checkout on this machine (for example `$HOME/work/git-go/milvus-sdk-node`).
+- Locate the repository checkout in this order: `$HOME/work/git-go/milvus-sdk-node` when it exists on this machine; a directory named `milvus-sdk-node` among the parent directories of the current working directory; `/home/runner/work/milvus-sdk-node/milvus-sdk-node` (GitHub Actions runner `$GITHUB_WORKSPACE`).
 - Confirm the checkout with `git rev-parse --show-toplevel`, `git remote -v`, `git branch --show-current`, and `git status --short` before relying on it.
 - Upstream is normally `source` (`milvus-io/milvus-sdk-node`); `origin` is usually the user's fork.
 - `main` is the active development line targeting Milvus 3.0; legacy release lines `2.4`, `2.5`, `2.6`, and `v1.x` are maintained separately. Confirm the branch set from Git before assuming API parity with `main`.

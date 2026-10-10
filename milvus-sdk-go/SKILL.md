@@ -11,7 +11,7 @@ language SDK or for server-side `internal/` packages.
 
 ## Start every task
 
-1. Resolve the repository root from the current directory; otherwise locate the repository checkout on this machine (for example `$HOME/work/git-go/milvus`).
+1. Locate the repository checkout in this order: `$HOME/work/git-go/milvus` when it exists on this machine; a directory named `milvus` among the parent directories of the current working directory; `/home/runner/work/milvus/milvus` (GitHub Actions runner `$GITHUB_WORKSPACE`).
 2. Confirm it with `git rev-parse --show-toplevel` and `git remote -v`.
 3. Confirm the Go SDK root at `$ROOT/client` and that `client/go.mod` declares module `github.com/milvus-io/milvus/client/v3`.
 4. Check `git branch --show-current`, `git status --short`, and the relevant upstream branch before assuming API parity.

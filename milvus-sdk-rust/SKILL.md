@@ -9,7 +9,7 @@ Maintain deprecated V1 compatibility and active V2 development as separate API s
 
 ## Repository and references
 
-- Prefer the current checkout when it is already inside `milvus-sdk-rust`; otherwise locate the repository checkout on this machine (for example `$HOME/work/git-go/milvus-sdk-rust`).
+- Locate the repository checkout in this order: `$HOME/work/git-go/milvus-sdk-rust` when it exists on this machine; a directory named `milvus-sdk-rust` among the parent directories of the current working directory; `/home/runner/work/milvus-sdk-rust/milvus-sdk-rust` (GitHub Actions runner `$GITHUB_WORKSPACE`).
 - Confirm the root and remotes with `git rev-parse --show-toplevel` and `git remote -v` before relying on a checkout. Upstream is normally `source`.
 - When committing, use `git commit -sm '<message>'` so the committer's email address is recorded; every commit in this repository must carry a Signed-off-by trailer.
 - When creating a pull request, ensure each PR contains exactly one commit.

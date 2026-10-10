@@ -11,7 +11,10 @@ Work from repository evidence. Treat this skill as a workflow and navigation lay
 
 - This skill is for the `zilliztech/knowhere` repository (C++ vector search engine, the ANN core of Milvus).
 - Upstream remote is normally `source`; `origin` is usually the user's fork.
-- Prefer the local checkout at `$HOME/work/git-go/knowhere` when it exists on this machine. If the current working directory is already inside that repository, use its root instead.
+- Locate the repository checkout in this order:
+  1. `$HOME/work/git-go/knowhere` when it exists on this machine;
+  2. a directory named `knowhere` among the parent directories of the current working directory;
+  3. `/home/runner/work/knowhere/knowhere` (GitHub Actions runner `$GITHUB_WORKSPACE`).
 - Confirm the checkout with `git rev-parse --show-toplevel` and `git remote -v` before relying on it. Do not assume the preferred path exists or is the correct repository without verification.
 - **Stale-working-tree guard**: the checked-out branch (even after `git fetch`) may be old while fetched upstream refs are current. For analysis and tracing, prefer reading source pinned to the relevant upstream branch — `git show refs/remotes/[remote]/[branch]:[path]` and `git ls-tree -r --name-only refs/remotes/[remote]/[branch] [dir]` — where `[remote]` is the remote that points at the native repo (milvus-io or zilliztech), whether it is named `source` or `origin`; confirm it with `git remote -v`, and check the branch set with `git branch --show-current`. Fetch the native remote first when freshness matters (`git fetch [remote]`), because remote-tracking refs can themselves be stale. Before editing, make sure the working tree is on the intended branch and in sync; never edit blindly on an old branch.
 
