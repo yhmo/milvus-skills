@@ -19,6 +19,11 @@ creep into snippets, so the written block is clean and idiomatic. It removes:
   - runs of 2+ consecutive blank lines (collapsed to a single blank line);
   - leading / trailing blank lines.
 
+It also ensures exactly one blank line between the import/include/use region
+(consecutive `import` / `use` / `#include` / `from` lines, including a Go
+`import ( ... )` block up to its closing `)`) and the following actual code
+line — so imports are always visually separated from the code that uses them.
+
 Blank lines that separate logical statements (after client init, between steps,
 inside `if` / `func` / `main` bodies) are preserved.
 
@@ -184,7 +189,57 @@ def normalize(text):
             continue
         out.append(line)
         prev_nb_idx = i
+    out = ensure_blank_after_imports(out)
     return '\n'.join(out)
+
+
+def ensure_blank_after_imports(lines):
+    """Ensure exactly one blank line between the import/include/use region and
+    the first following code line.
+
+    The import region is a maximal run of consecutive import-like lines
+    (`import` / `use` / `#include` / `from`, plus the interior of a Go
+    `import ( ... )` block, treated as one region through its closing `)`). If
+    a non-import code line directly follows the region without a blank line,
+    one is inserted; if there are multiple blank lines, they collapse to one.
+    Blank lines *between* consecutive import lines were already removed above.
+    """
+    out = []
+    go_depth = False
+    prev_was_import = False
+    i = 0
+    while i < len(lines):
+        line = lines[i]
+        s = line.strip()
+        if not s:
+            # collapse runs of blank lines (keep a single blank)
+            if out and not out[-1].strip():
+                i += 1
+                continue
+            out.append(line)
+            i += 1
+            continue
+        if s == 'import (':
+            go_depth = True
+        closing_go_import = go_depth and s == ')'
+        cur_import = import_like(s, go_depth) or closing_go_import
+        if go_depth and s == ')':
+            go_depth = False
+        if cur_import:
+            prev_was_import = True
+            out.append(line)
+        else:
+            if prev_was_import:
+                # ensure one blank line between import region and this code line
+                if out and out[-1].strip():
+                    out.append('')
+            prev_was_import = False
+            out.append(line)
+        i += 1
+    # trim trailing blank lines
+    while out and not out[-1].strip():
+        out.pop()
+    return out
 
 
 def main():

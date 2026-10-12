@@ -236,6 +236,20 @@ Updating a document WITHOUT the corresponding SDK skill risks API deviations
   absence of a `<synced-source>` wrapper around the `<pre>` — do not infer a
   missing-SDK gap just because other languages are absent.
 
+- **Code blocks that are NOT SDK snippets — skip them.** Do not treat the
+  following as SDK code to correct, add languages to, or fill imports for; they
+  are excluded from all SDK-related checks and fixes:
+  - plain-text / pure-text blocks (marked `text` or containing prose only);
+  - bash command lines that are ordinary shell/CLI usage (not a REST curl
+    block mirroring `/v2/vectordb/*` — REST curl blocks ARE covered);
+  - YAML config blocks;
+  - output examples (sample command output / results);
+  - JSON blocks that represent pure data (request bodies, responses, examples);
+  - Python blocks that only prepare data (e.g. using `numpy` to generate
+    vectors/datasets) and are unrelated to the SDK API flow.
+  These blocks are read for context (they may define names/values referenced by
+  SDK blocks) but are never themselves modified or counted toward the SDK set.
+
 ## Workflow
 
 0. **Pre-flight: check Feishu auth.** `lark-cli auth status --json` — user
@@ -360,7 +374,11 @@ Updating a document WITHOUT the corresponding SDK skill risks API deviations
    data-structure literals, blank lines immediately after an opening `{` or
    before a closing `}`/`]`/`)`, runs of 2+ blank lines, and leading/trailing
    blank lines (blank lines that separate logical statements inside `func`/
-   `main`/`if` bodies are preserved):
+   `main`/`if` bodies are preserved). **It also ensures exactly one blank line
+   between the import/include/use region and the first following code line**
+   (imports must always be visually separated from the code that uses them — e.g.
+   `import ...` / `use ...` / `#include ...` / `from ...` lines are followed by
+   one blank line before the client-init/function code):
 
    ```bash
    python3 scripts/normalize_snippet.py < snippet.txt > snippet-clean.txt
@@ -439,8 +457,19 @@ Updating a document WITHOUT the corresponding SDK skill risks API deviations
        available); otherwise report that javac was skipped.
      - `bash` → `bash -n <file>`.
    - Fix any reported syntax error in the Feishu block (Step 3) and re-run until
-     clean. If a toolchain is missing, say so explicitly in the report rather
-     than silently skipping.
+      clean. If a toolchain is missing, say so explicitly in the report rather
+      than silently skipping.
+   - **Import/include/use self-containment is the norm, not an error.** Each
+      code block is meant to be copied and run standalone — keep every symbol's
+      import/include/use statement in its own block, even when a multi-block
+      flow (create collection → create index → insert → query) repeats the same
+      imports in every block. Repeated imports across blocks in the same
+      document are expected and correct; do NOT strip them to "deduplicate".
+      This is what makes each block independently runnable. The only real
+      constraint is Go: pasting consecutive blocks into one file fails to
+      compile on duplicate imports (and unused imports) — note this in the
+      report when relevant, but never remove imports from a block to work
+      around it.
    - Code blocks that are **fragments by design** (a mid-file data array, a
      continuation block referencing earlier blocks) may fail a standalone parse;
      judge by intent — concatenate continuation blocks in the same section for
