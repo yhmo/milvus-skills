@@ -78,6 +78,20 @@ config-constant definitions). Real-run verification against a Milvus server is
   > skill directory (which is symlinked into the agent's skills dir).
 - **Only touch code blocks.** Never rewrite surrounding prose, headings,
   callouts, tables, images, or citations.
+- **Preserve existing comments inside code blocks.** When editing a snippet,
+  keep its inline comments (e.g. `// Send keepalive pings...`,
+  `# 1. Set up a Milvus client`) verbatim unless a comment is factually wrong
+  or no longer matches the code — in that case correct the comment in place.
+  Remove a comment only when it is entirely unrelated to the code (e.g. a
+  stray paste). Do NOT drop comments just because the surrounding code is being
+  rewritten, and do not treat them as noise to strip.
+- **Output comments must be real-run only.** If the pymilvus block carries an
+  "Example output" (or similar) comment showing the expected output, the other
+  SDK blocks for that section should carry matching output comments **only when
+  the code has actually been run against a real Milvus server** (Step 5). Output
+  comments must be written from the real run's observed output, never guessed.
+  If no real-run happened, do NOT fabricate or copy output comments into the
+  other languages — leaving them out is correct in that case.
 - Within one section the snippets across SDKs must follow the **same logical
   flow and sub-step numbering** as the pymilvus block.
 - Match each document's existing per-SDK style (imports, client initialization,
@@ -352,9 +366,12 @@ Updating a document WITHOUT the corresponding SDK skill risks API deviations
       <feature> not supported as of vX.Y.Z"). Never write code for APIs that do
       not exist — only the comment.
    - **Existing snippets** → check against the SDK's latest tag: deprecated or
-     renamed methods, changed builder signatures, wrong imports, missing steps,
-     XML-escaping mistakes that break the code. Fix in place, keeping the
-     pymilvus-mirrored flow.
+      renamed methods, changed builder signatures, wrong imports, missing steps,
+      XML-escaping mistakes that break the code. Fix in place, keeping the
+      pymilvus-mirrored flow. **Keep the block's existing comments**: preserve
+      them verbatim while fixing code, correct a comment only if it is wrong or
+      outdated, and delete a comment only if it is completely unrelated to the
+      code. Never drop comments as a side effect of a rewrite.
 3. **Rewrite the code block in Feishu.** Replace a `<pre>` block with
    `lark-cli docs +update`:
 
@@ -524,7 +541,14 @@ Updating a document WITHOUT the corresponding SDK skill risks API deviations
         keep the block complete and add a comment in that language's syntax
         (e.g. `// Note: ... not supported in milvus-sdk-java as of vX.Y.Z`)
         stating the SDK has not implemented it. Record it in the report too;
-      - **naming** — same collection/database/field names across languages.
+      - **naming** — same collection/database/field names across languages;
+      - **output-comment parity (real-run only)** — if the Python baseline has
+        an "Example output" / expected-output comment, the other languages should
+        mirror it **only when the snippets were actually executed against a real
+        Milvus server (Step 5)** and the output was captured. Never write an
+        output comment into another language unless it comes from a real run;
+        without a real run, leaving the output comment out is the correct
+        behavior (do not invent or copy output values).
    - **Block order check — every group must follow the canonical SDK order.**
      For every multi-SDK group (a `<synced-source>` container, or a run of
      sibling `<pre>` blocks in one section), the languages must appear in the
@@ -634,6 +658,13 @@ Updating a document WITHOUT the corresponding SDK skill risks API deviations
     - **Failures are findings**: when a block fails (wrong API usage, wrong data
       shape), fix the snippet in the Feishu document (Step 3) and re-run so the
       live run passes — this is the point of the check.
+    - **Output comments are written here and only here.** If the pymilvus block
+      shows an "Example output" (or similar) comment and the section's snippets
+      actually run against the server, add the matching output comment to the
+      other languages **from the observed real-run output** (each language's
+      comment syntax, Step 4 consistency rule). Do not copy Python's printed
+      shape verbatim if an SDK prints differently — use what that SDK actually
+      printed. When a real run did not happen, do not add output comments at all.
  6. **Validate** before reporting done:
    - every section has the full SDK set the document claims (tabs vs blocks
      match);
