@@ -60,6 +60,19 @@ config-constant definitions). Real-run verification against a Milvus server is
   markdown to edit and no git push/PR step — changes are written directly to the
   Feishu document via `lark-cli docs +update`. See "Pushing / PR" below for the
   implications.
+- **Concurrent edits to the same document (multi-channel runs) do not conflict
+  at the content level — but mind the revision race.** All writes are
+  block-level (`block_replace`/`block_insert_after` targeting a specific
+  `<pre>` block-id), so two editors touching different code blocks keep both
+  changes. The one real risk is the fetch→write window: if another editor's
+  write lands between your `docs +fetch` and your `docs +update`, your write is
+  based on a stale revision and Feishu may reject it. Mitigate by (1) re-fetching
+  right before each write and reusing only the freshly-read block-ids, and
+  (2) treating a rejected write as "re-fetch and retry", never as a silent
+  skip. Only two editors editing the *same* block overwrite each other —
+  the later write wins. 本 skill 的并发场景：多个文档工程师各自处理不同
+  链接组，同一文档通常不会同时被两人编辑；若确实需要多人改同一文档的不同
+  代码块，务必各自「写前重新 fetch 最新 revision」，写入被拒即重新 fetch 重试。
 - **Do not stop to ask for scope confirmation before a large backfill.** Once
   the page coverage is determined (default: all documents that already contain
   code blocks), proceed automatically without prompting — fixing snippets across
