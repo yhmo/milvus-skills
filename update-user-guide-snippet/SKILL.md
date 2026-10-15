@@ -615,6 +615,14 @@ Updating a document WITHOUT the corresponding SDK skill risks API deviations
      - **Probe** whether a Milvus server is reachable first:
        `python3 -c "from pymilvus import connections; connections.connect(host='localhost', port=19530, token='root:Milvus'); connections.disconnect('default')"`
        or probe the REST health endpoint `curl -s http://localhost:9091/healthz`.
+     - **No server reachable → start one via the `milvus-server-launch`
+       skill** (Docker Compose standalone, variants under
+       `milvus-server-launch/{2.6,master}`): `cd` into a variant directory and
+       `docker compose up -d`, then wait for
+       `curl -sf http://localhost:9091/healthz`. Only do this when the live-run
+       step was explicitly requested; never start a server for parse-only
+       checks. Note that the `2.6` and `master` variants share container names
+       and ports, so only one can run at a time (see that skill's SKILL.md).
      - **Server reachable** → run the edited page's snippets per SDK via the
        bundled runners in `scripts/`:
 

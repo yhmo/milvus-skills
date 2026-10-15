@@ -17,6 +17,9 @@ target/
 # Generated temp files
 json-field-pages.md
 
+# Milvus server runtime data (docker compose bind mounts, created on startup)
+milvus-server-launch/*/volumes/
+
 # Debug / temp scratch files (never commit)
 *_debug.*
 *_debug_tmp.*
