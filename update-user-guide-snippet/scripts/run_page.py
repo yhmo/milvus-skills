@@ -190,7 +190,9 @@ def main():
     # a divergent schema (its snippets call create_collection("my_collection",
     # ...)). Creating a different collection (e.g. `users`) must not trigger it,
     # and search/query-only pages keep the canonical seed.
-    page_creates = bool(re.search(r'create_collection\s*\(\s*["\']?my_collection', md))
+    page_creates = bool(re.search(
+        r'create_collection\s*\([\s\S]*?collection_name\s*=\s*["\']?my_collection'
+        r'|create_collection\s*\(\s*["\']?my_collection', md))
 
     # collect referenced collections from the page text
     names = [n for n in SEEDS if re.search(rf"\b{n}\b", md)]
