@@ -81,6 +81,7 @@ Before Step 1, inspect the PR metadata and try to load the matching repository s
 2. Use this mapping:
    - `milvus-io/milvus` -> `milvus`
    - `milvus-io/milvus-sdk-cpp` -> `milvus-sdk-cpp`
+   - `milvus-io/milvus-sdk-csharp` -> `milvus-sdk-csharp`
    - `milvus-io/milvus-sdk-java` -> `milvus-sdk-java`
    - `milvus-io/milvus-sdk-rust` -> `milvus-sdk-rust`
    - `milvus-io/pymilvus` -> `pymilvus`

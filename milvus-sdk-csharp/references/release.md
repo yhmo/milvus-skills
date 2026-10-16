@@ -35,10 +35,11 @@ At the time this skill was written:
 - `Changelog.md` records user-visible release history; it is the release-notes source of truth.
 - Two NuGet packages are produced: `Milvus.Client` (V1) and `Milvus.Client.V2` (V2). Both multi-target
   `net8.0;netstandard2.0;net462`.
-- `.github/workflows/NugetPublish.yml.disabled` contains the tag-driven NuGet publishing workflow; it
-  is currently disabled. When enabled, it derives the package version from the git tag via
-  `dotnetCampus.TagToVersion` (`-f Version.props`), builds `-c Release`, packs to `Artifacts/`, and
-  pushes to nuget.org.
+- `.github/workflows/NugetPublish.yml` is the tag-driven NuGet publishing workflow (triggered by `v*.*.*`
+  tags). It verifies the tag points at a commit already on a remote branch with green CI and a matching
+  CHANGELOG entry (`scripts/extract_changelog.sh`), builds `-c Release`, packs the two SDK projects to
+  `Artifacts/`, logs in via NuGet Trusted Publishing (OIDC), pushes packages + symbols to nuget.org with
+  `--skip-duplicate`, then creates the GitHub release.
 - `.github/workflows/Build.yml` is the CI build/test workflow.
 
 Always verify current repo state before release work:
@@ -94,14 +95,21 @@ The projects set `PublishRepositoryUrl`, `IncludeSymbols` (`snupkg`), and `Embed
 
 Only perform this section after explicit maintainer approval.
 
-The tag-driven `NugetPublish.yml.disabled` workflow (when enabled) performs these phases in order:
+The tag-driven `NugetPublish.yml` workflow performs these phases in order:
 
-1. Checkout with `submodules: recursive` and `fetch-depth: 0`.
-2. Set the version from the git tag into `Version.props` via `dotnetCampus.TagToVersion`.
+1. Validate: check out the tag (`submodules: recursive`, `fetch-depth: 0`) and verify the tag's commit is
+   already on some remote branch (main, 2.6, ...) with a green CI run on that commit — a tag can never
+   publish code that did not pass the required checks.
+2. Set the package version from the tag: install `dotnetCampus.TagToVersion` and run
+   `dotnet TagToVersion -t <tag> -f Version.props`, then assert the tag version equals the resulting
+   `Version.props` version and that a matching CHANGELOG entry exists (`scripts/extract_changelog.sh`).
 3. `dotnet build -c Release`.
-4. `dotnet pack -c Release -o Artifacts`.
-5. Upload `Artifacts/*.nupkg` and `*.snupkg`.
-6. `dotnet nuget push Artifacts/*.nupkg --api-key ${{ secrets.NugetKey }} --source https://api.nuget.org/v3/index.json`.
+4. `dotnet pack Milvus.Client/Milvus.Client.csproj` and `Milvus.Client.V2/Milvus.Client.V2.csproj`
+   (release config) into `Artifacts/` — examples/test projects are not packaged.
+5. NuGet login via Trusted Publishing (OIDC, `NuGet/login@v1`) which issues a temporary API key.
+6. `dotnet nuget push Artifacts/*.nupkg` and `Artifacts/*.snupkg` to nuget.org with `--skip-duplicate`
+   (idempotent re-runs).
+7. Create the GitHub release from the extracted changelog, with the compatible Milvus version in the body.
 
 If publishing manually, confirm authentication and use the repository's `nuget.config` source mapping.
 

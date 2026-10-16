@@ -24,12 +24,11 @@ resolve the actual repo root with `git rev-parse --show-toplevel` first, and
 report and ask before cloning when no checkout exists.
 
 > **csharp V2 availability**: the C# `MilvusClientV2` implementation lives under
-> `Milvus.Client.V2/` and as of the current upstream state is NOT yet merged to
-> `milvus-io/milvus-sdk-csharp` `main` (it sits in open PR #141
-> `yhmo:ma`). The local `ma` branch of the preferred checkout mirrors the PR
-> head. When a requested branch lacks `Milvus.Client.V2`, pin the audit to the
-> PR head (`git fetch source refs/pull/141/head:refs/remotes/source/pr-141`),
-> and record that the V2 facade came from the PR, not the branch's own tree.
+> `Milvus.Client.V2/` and is merged to upstream. It ships as the first stable
+> V2 release **v2.6.0** (2026-10-16) from the `source/2.6` branch; `main`
+> continues the V2 development line. Request/Response DTOs mirror the
+> Java/C++/Rust V2 SDKs. Audit pinned to `source/main` or `source/2.6` directly;
+> do NOT pin to a PR head.
 
 ## Branch keyword mapping
 
@@ -37,11 +36,20 @@ Map the user's branch keyword to the actual remote branch ref:
 
 | Keyword | pymilvus | java | cpp | csharp | rust |
 |---|---|---|---|---|---|
-| `master` | `source/master` | `source/master` | `source/master` | `source/main` (dev line; V2 not merged yet, see PR note above) | `source/main` (dev line; some docs call it `master`) |
+| `master` | `source/master` | `source/master` | `source/master` | `source/main` (dev line) | `source/main` (dev line; some docs call it `master`) |
 | `main` | `source/master` | `source/master` | `source/main` | `source/main` | `source/main` |
-| `3.0` | `source/3.0` | `source/3.0` | — | — | — |
-| `2.6` | `source/2.6` | `source/2.6` | `source/2.6` | — | `source/2.6` |
+| `3.0` | `source/3.0` | `source/3.0` | `source/master` (no dedicated `3.0` branch) | `source/main` | `source/main` (no dedicated `3.0` branch) |
+| `2.6` | `source/2.6` | `source/2.6` | `source/2.6` | `source/2.6` | `source/2.6` |
 | `2.5` | `source/2.5` | `source/2.5` | `source/2.5` | — | `source/2.5` |
+
+Branch model across the V2 SDKs (csharp/java/cpp/rust): absent a dedicated
+major-version branch, the dev line (`master` for java/cpp, `main` for
+csharp/rust) is also the release branch for the newest supported Milvus major —
+`x.y.z` releases are cut directly from it (cpp/rust have no `3.0` branch yet;
+csharp's `main` is planned as the Milvus 3.0 dev/release branch; java already
+carries a `3.0` branch that tracks `master`). When a newer major arrives, the
+current major's branch (e.g. `3.0`) is forked from the dev line and the dev
+line follows the new major. Always verify the actual branch set from Git.
 
 Fetch pinned with:
 
@@ -184,9 +192,11 @@ for name in sorted(names):
 Method names are PascalCase with an `Async` suffix (e.g. `CreateCollectionAsync`,
 `SearchAsync`, `UseDatabaseAsync`); strip the suffix when mapping to other
 SDKs' names. The facade class is split into partials (`MilvusClientV2.cs` plus
-`MilvusClientV2.Alias.cs`, `.BulkImport.cs`, `.Collection.cs`, `.Database.cs`,
-`.Dml.cs`, `.Dql.cs`, `.Index.cs`, `.Partition.cs`, `.Rbac.cs`,
-`.ResourceGroup.cs`, `.Utility.cs`), so concatenate all of them for extraction.
+`MilvusClientV2.Alias.cs`, `.Collection.cs`, `.Database.cs`, `.Dml.cs`,
+`.Dql.cs`, `.Index.cs`, `.Partition.cs`, `.Rbac.cs`, `.ResourceGroup.cs`,
+`.Utility.cs`), so concatenate all of them for extraction. `BulkImport.cs` is a
+standalone REST bulk-import client (`BulkImportConfig` + `BulkImport`), not a
+facade partial, and is excluded by the `MilvusClientV2[^/]*\.cs$` match.
 
 ## Deprecation markers per SDK (Step 2 deprecated-status comparison)
 

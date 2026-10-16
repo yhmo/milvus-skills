@@ -31,10 +31,12 @@ language SDK except when comparing behavior.
 - `source` is normally the upstream `milvus-io/milvus-sdk-cpp` remote; `origin` is usually the user's fork.
 - `master` is the active development line; legacy release lines such as `2.6` are maintained separately. Confirm any
   additional release branch from Git rather than assuming it matches `master`.
-- **Version branch model**: `master` tracks the newest supported Milvus major release (currently 3.0). Each prior major
-  line keeps a maintenance branch (`2.6` for Milvus 2.6, plus older lines like `2.5`/`2.4`). When the SDK advances to a
-  newer Milvus major (3.1/4.0), `master` will follow it and a `3.0` branch will be created or frozen to serve Milvus 3.0
-  users (some other SDKs already carry a `3.0` branch that today tracks their dev line). Always verify the
+- **Version branch model**: absent a dedicated major-version branch, `master` is both the development branch and the
+  release branch for the newest supported Milvus major — `x.y.z` releases for that major are cut directly from it.
+  `master` currently tracks the Milvus 3.0 line (no separate `3.0` branch exists). Each prior major line keeps a
+  maintenance branch (`2.6` for Milvus 2.6, plus older lines like `2.5`/`2.4`). When the SDK advances to a newer Milvus
+  major (3.1/4.0), `master` will follow it and a `3.0` branch will be created or frozen to serve Milvus 3.0 users (some
+  other SDKs already carry a `3.0` branch that today tracks their dev line). Always verify the
   branch-to-Milvus-version mapping from Git rather than assuming a branch name implies a server line.
 - **Stale-working-tree guard**: the checked-out branch (even after `git fetch`) may be old while fetched upstream refs
   are current. For analysis and tracing, prefer reading source pinned to the relevant upstream branch —

@@ -36,8 +36,11 @@ centralizes NuGet package versions.
 
 - `MilvusClientV2.cs` — connection/utility/infrastructure: constructor, `ConnectAsync`, `HealthAsync`,
   `CheckHealthAsync`, `GetServerVersionAsync`, `Dispose`, and the internal `InvokeAsync` RPC path.
-- `MilvusClientV2.Alias.cs`, `.BulkImport.cs`, `.Collection.cs`, `.Database.cs`, `.Dml.cs`, `.Dql.cs`,
-  `.Index.cs`, `.Partition.cs`, `.Rbac.cs`, `.ResourceGroup.cs`, `.Utility.cs` — one partial file per domain.
+- `MilvusClientV2.Alias.cs`, `.Collection.cs`, `.Database.cs`, `.Dml.cs`, `.Dql.cs`, `.Index.cs`,
+  `.Partition.cs`, `.Rbac.cs`, `.ResourceGroup.cs`, `.Utility.cs` — one partial file per domain.
+- `BulkImport.cs` — standalone REST bulk-import client (`BulkImportConfig` + `BulkImport`) for the
+  Milvus 2.6 HTTP import endpoints (create / progress / list jobs); it is not part of the
+  `MilvusClientV2` facade.
 
 Each facade method follows the pattern:
 

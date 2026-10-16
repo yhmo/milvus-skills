@@ -24,8 +24,9 @@ Changelog.md                 user-facing release history
 
 ```text
 MilvusClientV2.cs                 connection/utility/infrastructure + internal InvokeAsync
-MilvusClientV2.<Area>.cs          facade partial files: Alias, BulkImport, Collection, Database,
-                                  Dml, Dql, Index, Partition, Rbac, ResourceGroup, Utility
+MilvusClientV2.<Area>.cs          facade partial files: Alias, Collection, Database, Dml, Dql,
+                                  Index, Partition, Rbac, ResourceGroup, Utility
+BulkImport.cs                     standalone REST bulk-import client (BulkImportConfig + BulkImport)
 MilvusErrorCode.cs                server error-code enum
 MilvusException.cs                SDK exception
 Request/<area>/*Req.cs            public request DTOs + internal ToGrpc*() conversion
