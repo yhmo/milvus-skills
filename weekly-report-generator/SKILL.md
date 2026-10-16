@@ -52,8 +52,11 @@ From 2026-06-05 15:00 CST to 2026-06-12 15:00 CST
 
 ## Work items
 - Project or area name
-  - [x] Completed item [link](https://...)
-  - [ ] In-progress item [link](https://...)
+  - [x] Completed item
+    - [repo#1](https://github.com/org/repo/pull/1)
+    - [repo#2](https://github.com/org/repo/pull/2)
+  - [ ] In-progress item
+    - [repo#3](https://github.com/org/repo/pull/3)
 
 ## Plan for next week
 - ...
@@ -239,8 +242,17 @@ If auto-trigger does not happen, explicitly ask:
   - Normalize wording to clear action/outcome language.
   - Keep technical accuracy (API names/features) while improving readability.
   - Keep the title concise (prefer one short line).
-- Keep one line per item.
-- Include links when provided.
+- Keep the work title on its own line, with no PR links inline.
+- **Render every PR link as its own sub-bullet** indented under the work item, regardless of how many PRs the item has (even a single PR). Do not join links on the work-title line or separate multiple links with spaces (on Feishu they collapse into a single line).
+  - Format:
+    ```md
+    - Project or area name
+      - [x] Work title text
+        - [repo#NNN](https://github.com/org/repo/pull/NNN)
+        - [repo#NNM](https://github.com/org/repo/pull/NNM)
+      - [ ] In-progress work title
+        - [repo#NNN](https://github.com/org/repo/pull/NNN)
+    ```
 - Under each group, list checklist bullets:
   - `[x]` only for PRs merged within the report window
   - `[ ]` for PRs that are still open
