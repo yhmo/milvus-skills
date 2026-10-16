@@ -594,6 +594,27 @@ Updating a document WITHOUT the corresponding SDK skill risks API deviations
        Milvus — **never change the document's placeholders**. Report this
        substitution in the summary. Never ask the user for real cloud
        credentials.
+     - **Consistency/visibility workarounds are harness-only — never touch the
+       document for them.** A snippet that inserts rows and later
+       searches/queries them can legitimately return no rows in a real run: the
+       query uses the default `consistency_level=Bounded`, so freshly inserted
+       rows are not yet visible, and the collection may not be loaded. **Never
+       "fix" the document for this**: do NOT add a `flush()` call or a
+       `load_collection()` call, and do NOT set `consistency_level=Strong` on
+       any search/query in a Feishu snippet. Those are run-harness concerns, not
+       snippet content — the document keeps its original flow unchanged. Instead
+       apply the workaround **only in the local verification copy** (same rule
+       as the localhost substitution):
+       rewrite each language's search/query block to set
+       `consistency_level=Strong` (per-SDK equivalent, e.g. pymilvus
+       `consistency_level="Strong"`, java `consistencyLevel(...)`, go
+       `WithConsistencyLevel(...)`, node `consistency_level: "Strong"`), adding
+       `load_collection()` before the first search/query only when the
+       collection must be loaded to be searchable, so the run actually returns
+       results. Report these substitutions in the summary. The bundled runners'
+       internal seed fixtures may call `flush()`/`load_collection()` to prepare
+       shared fixture collections — that is harness plumbing, distinct from
+       snippet content; never mirror it into document blocks.
      - **Features that cannot be real-run (skip them, but still verify their
        API statically in Step 4).** These need external resources that cannot be
        simulated locally, so their code blocks are NOT executed; note the skip in
@@ -610,8 +631,8 @@ Updating a document WITHOUT the corresponding SDK skill risks API deviations
        temporary page file in the exact shape the runners expect (fenced
        ```lang blocks in document order), e.g.
        `scripts/fetch_to_md.py <docx> --out sdk-tmp/snippet-run/<doc>.md`.
-       Apply the localhost substitution (above) to this extracted copy before
-       running.
+       Apply the localhost substitution and the `consistency_level=Strong`
+       workaround (both above) to this extracted copy before running.
      - **Probe** whether a Milvus server is reachable first:
        `python3 -c "from pymilvus import connections; connections.connect(host='localhost', port=19530, token='root:Milvus'); connections.disconnect('default')"`
        or probe the REST health endpoint `curl -s http://localhost:9091/healthz`.
@@ -676,9 +697,14 @@ Updating a document WITHOUT the corresponding SDK skill risks API deviations
       localhost:19530/9091 — snippets were NOT executed. Start a Milvus
       instance (e.g. docker standalone) to enable this check." Never silently
       skip it.
-    - **Failures are findings**: when a block fails (wrong API usage, wrong data
-      shape), fix the snippet in the Feishu document (Step 3) and re-run so the
-      live run passes — this is the point of the check.
+    - **Failures are findings**: when a block fails on actual wrong API usage or
+      wrong data shape, fix the snippet in the Feishu document (Step 3) and
+      re-run so the live run passes — this is the point of the check. A failure
+      caused only by consistency/visibility timing (Bounded consistency hiding
+      freshly inserted rows, or a collection the page never loads) is NOT a
+      snippet bug: leave the document unchanged and make the run pass via the
+      `consistency_level=Strong` workaround in the local verification copy (see
+      the harness-only rule above).
     - **Output comments are written here and only here.** If the pymilvus block
       shows an "Example output" (or similar) comment and the section's snippets
       actually run against the server, add the matching output comment to the
