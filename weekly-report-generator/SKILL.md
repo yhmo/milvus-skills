@@ -1,6 +1,6 @@
 ---
 name: weekly-report-generator
-description: Generates a weekly engineering report / 周报 in Markdown with exactly these sections: Time, Summary, Work items, and Plan for next week. After generating, automatically publishes the report into a Feishu (飞书) wiki document following the hierarchy "root page → YYYYMMDD (Friday) sub-doc → <user name> sub-doc", and returns the published link. Use when the user asks to draft, update, or polish a weekly report, summarize this week’s work, turn tasks/PRs into a status report, or asks in Chinese for 周报、本周周报、上周周报、工作总结、PR 周报、下周计划.
+description: Generates a weekly engineering report / 周报 in Markdown with exactly these sections: Time, Summary, Work items, and Plan for next week. After generating, automatically publishes the report into a Feishu (飞书) wiki document following the hierarchy "root page → YYYYMMDD (Friday) sub-doc → <user name> sub-doc", and returns the published link. The root page defaults to the wiki page titled "Milvus I 周报" (auto-discovered when no wiki URL is given). Use when the user asks to draft, update, or polish a weekly report, summarize this week’s work, turn tasks/PRs into a status report, or asks in Chinese for 周报、本周周报、上周周报、工作总结、PR 周报、下周计划.
 ---
 
 # Weekly Report Generator
@@ -16,13 +16,18 @@ Save the report as a Markdown file:
 - Default directory: `/tmp`
 - If user provides a path, save to that path instead
 
-Publish the finished report to Feishu automatically when the user provides a Feishu wiki URL. The target page hierarchy is:
+Publish the finished report to Feishu automatically. The target page hierarchy is:
 
 ```
-<root wiki node>                 e.g. https://zilliverse.feishu.cn/wiki/<token>  (title e.g. "Milvus I 周报")
+<root wiki node>                 title e.g. "Milvus I 周报" (the default discovery target)
 └── YYYYMMDD/                    title = Friday of the current ISO week, e.g. "20260925"
     └── <user name>              title = the user's lark `name` field, verbatim
 ```
+
+The root wiki node is resolved in this priority order:
+1. A Feishu wiki URL the user provided (`.../wiki/<token>`, e.g. `https://zilliverse.feishu.cn/wiki/<token>`).
+2. **Default: auto-discovery of the page titled exactly `Milvus I 周报`** (searched across the user's accessible wiki spaces via `drive +search`). Use this when no URL is given — do not stop to ask for a URL when the page is found.
+3. If discovery finds zero or multiple matches, ask the user (zero: provide the root wiki URL or skip publishing; multiple: pick the correct one).
 
 The weekly report is written into the `<user name>` page, and the page URL is returned to the user.
 
@@ -112,6 +117,7 @@ gh auth login
 - `lark-shared` — auth/scope handling (MUST read first)
 - `lark-wiki` — wiki node lookup/create (`+node-list`, `+node-create`)
 - `lark-doc` — document write (`docs +update`)
+- `lark-drive` — default root page discovery (`drive +search`)
 
 Preflight:
 ```bash
@@ -123,9 +129,10 @@ lark-cli auth status --format json
 - If the session is not logged in, ask the user to run `lark-cli auth login` (per `lark-shared`) before publishing.
 - Always use `--as user` for wiki and doc operations (wiki pages are user resources; the bot identity lacks the required scopes).
 
-A target root wiki URL (`.../wiki/<token>`) must be available:
-- If the user provided a Feishu wiki URL in the request, use it.
-- If not, ask the user for the root wiki URL to publish into; if they do not want to publish, skip Step 8 and just save the file.
+A target root wiki node must be resolvable:
+- If the user provided a Feishu wiki URL (`.../wiki/<token>`) in the request, use it.
+- If not, auto-discover the default root page titled exactly `Milvus I 周报` (see Step 8). Do not ask for a URL when the default page is found.
+- If discovery finds zero or multiple matches, ask the user (provide the root wiki URL, or skip Step 8 and just save the file).
 
 ## How to trigger this skill
 Use prompts such as:
@@ -133,11 +140,13 @@ Use prompts such as:
 - "Draft a weekly engineering report from my PRs."
 - "Create/update my weekly report and save it to /tmp."
 - "Generate this week's weekly report and publish it to the Feishu wiki https://zilliverse.feishu.cn/wiki/<token>"
+- "Generate this week's weekly report and publish it." (publishes to the default `Milvus I 周报` wiki page when no URL is given)
 - "Use t1=2026-05-23T15:00:00Z, t2=2026-05-30T15:00:00Z, github account yhmo, then generate report."
 
 Chinese prompts can trigger this skill too, for example:
 - "帮我生成本周周报。"
 - "生成周报并发布到飞书文档 https://zilliverse.feishu.cn/wiki/<token>"
+- "生成周报并发布。" (未提供网址时默认发布到 "Milvus I 周报" 知识库页面)
 - "根据我这周的 PR 生成 weekly report。"
 - "总结这周的工作，生成包含 Summary、Work items 和 Plan for next week 的周报。"
 - "使用 t1=2026-05-23T15:00:00Z，t2=2026-05-30T15:00:00Z，GitHub 账号 yhmo，生成周报。"
@@ -286,17 +295,32 @@ If auto-trigger does not happen, explicitly ask:
 - Report the final file path after the full report content.
 - Never say a file is saved unless the verification commands pass.
 
-### Step 8: Publish report to Feishu (automatic when a wiki URL is given)
+### Step 8: Publish report to Feishu (automatic; default target is the "Milvus I 周报" wiki page)
 
 > **⚠️ HARD RULE (top priority):** This skill may **ONLY ADD** content to the Feishu document. It must **NEVER delete, replace, or overwrite anything** that already exists in the document. Only `docs +update --command append` / `block_insert_after` may be used. `overwrite`, `block_delete`, `block_replace`, and `str_replace` are forbidden on the Feishu document.
 
 After the report file is saved and verified, publish it to Feishu automatically. Follow this hierarchy (also read the root page itself if it documents its own instructions — for example the `Milvus I 周报` page instructs `root → YYYYMMDD → <user name>` and defines update semantics):
 
-1. **Resolve the root wiki node.** Extract the `<token>` from the user-provided `.../wiki/<token>` URL, then:
-   ```bash
-   lark-cli wiki spaces get_node --params '{"token":"<wiki_token>"}' --format json --as user
-   ```
-   Record `data.node.space_id` and `data.node.node_token`.
+1. **Resolve the root wiki node.**
+   - If the user provided a Feishu wiki URL (`.../wiki/<token>`): extract the `<token>` and resolve it:
+     ```bash
+     lark-cli wiki spaces get_node --params '{"token":"<wiki_token>"}' --format json --as user
+     ```
+     Record `data.node.space_id` and `data.node.node_token`. The `<root_url_base>` is the origin of the provided URL (e.g. `https://zilliverse.feishu.cn`).
+   - Otherwise, **auto-discover the default root page titled exactly `Milvus I 周报`**:
+     1. Search for it:
+        ```bash
+        lark-cli drive +search --query "Milvus I 周报" --only-title --format json --as user
+        ```
+     2. Filter the results to `entity_type == "WIKI"` (ignore DOC / SHEET / BITABLE / FOLDER etc.).
+     3. Match handling:
+        - **Exactly one WIKI result** → verify it and use it as the root node (do not stop or ask):
+          ```bash
+          lark-cli wiki +node-get --node-token <result_token> --format json --as user
+          ```
+          Confirm `data.title == "Milvus I 周报"`, then record `data.space_id` and `data.node_token`. Derive `<root_url_base>` from the search result's `url` (strip the `/wiki/<token>` suffix, e.g. `https://zilliverse.feishu.cn`).
+        - **Multiple WIKI results** → list the candidates (title / space / URL) and ask the user to pick the correct root node before continuing.
+        - **Zero WIKI results** → ask the user for the root wiki URL to publish into; if they do not want to publish, skip Step 8 and just save the file.
 
 2. **Compute the date node title `YYYYMMDD`.** It is the Friday of the current ISO week (upcoming Friday on Mon–Fri, most recent past Friday on Sat–Sun). Run (uses GNU date; the formula is verified on Linux):
    ```bash
@@ -349,7 +373,7 @@ After the report file is saved and verified, publish it to Feishu automatically.
    - Build the published page URL from the root URL base: `<root_url_base>/wiki/<personal_node_token>` (e.g. `https://zilliverse.feishu.cn/wiki/<personal_node_token>`).
    - Include this URL in the assistant response together with the full report content and the saved file path.
 
-If the user did not provide a wiki URL, skip this step and only save the file.
+If no root wiki node could be resolved (no user-provided URL and the default `Milvus I 周报` page was not found), skip this step and only save the file.
 
 ## Rules
 - Keep the four section titles exactly as specified.
@@ -362,8 +386,8 @@ If the user did not provide a wiki URL, skip this step and only save the file.
 - Never overwrite an existing file unless user explicitly asks.
 - Filename format is mandatory: `weekly-report-[utc date].md` using UTC date from `date -u +%F`.
 - Publishing rules:
-  - Publish automatically after saving whenever the user provided a Feishu wiki URL.
-  - Ask for the root wiki URL if it is missing and the user wants publishing.
+  - Publish automatically after saving when a Feishu wiki URL was provided, or when the default `Milvus I 周报` root page is found via discovery. A plain "generate and publish" request without a URL defaults to the discovered `Milvus I 周报` page.
+  - Ask for the root wiki URL only if the default page is missing or ambiguous (zero/multiple WIKI matches) and the user still wants publishing.
   - Use `--as user` for all Feishu wiki/doc operations.
   - Date node title is the `YYYYMMDD` Friday of the current ISO week (computed via the shell command in Step 8); personal node title is the user's lark `name` verbatim.
   - If the `YYYYMMDD` date node or the personal node is missing, create it automatically with `wiki +node-create` (additive, low-risk) — never block publishing waiting for user confirmation on creation.
@@ -382,7 +406,7 @@ If the user did not provide a wiki URL, skip this step and only save the file.
 - Output directory follows default `/tmp` or user-provided override.
 - Filename matches `weekly-report-[utc date].md` from `date -u +%F`.
 - Final saved file path is included in the response.
-- If a Feishu wiki URL was provided:
+- If publishing to Feishu (user provided a wiki URL, or the default `Milvus I 周报` page was discovered):
   - `lark-cli` is available and logged in (`lark-cli auth status`).
   - The `YYYYMMDD` date node (Friday of the current ISO week) exists under the root node (auto-created via `wiki +node-create` if it was missing).
   - The personal `<user name>` node exists under the date node (auto-created if missing) and contains the report.
