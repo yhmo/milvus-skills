@@ -1,6 +1,6 @@
 ---
 name: milvus-server-launch
-description: Launch, stop, switch, and health-check a local Milvus standalone server via Docker Compose. Two variants are provided — a stable 2.6 release (milvusdb/milvus:v2.6.25) and a master nightly build (milvusdb/milvus:master-*) — each with its own docker-compose.yml and milvus.yaml. Use when the user asks to start/restart/stop a local Milvus server, switch between the 2.6 and master standalone deployments, check whether the local Milvus is healthy, or reset local Milvus data. Also use whenever another skill or workflow needs a live local Milvus standalone instance (e.g. real-run verification against localhost:19530).
+description: Launch, stop, switch, and health-check a local Milvus standalone server via Docker Compose. Two variants are provided — a stable 2.6 release (milvusdb/milvus:v2.6.25) and a 3.0 release (milvusdb/milvus:v3.0.3) — each with its own docker-compose.yml and milvus.yaml. Use when the user asks to start/restart/stop a local Milvus server, switch between the 2.6 and 3.0 standalone deployments, check whether the local Milvus is healthy, or reset local Milvus data. Also use whenever another skill or workflow needs a live local Milvus standalone instance (e.g. real-run verification against localhost:19530).
 ---
 
 # Launch Local Milvus Standalone Server
@@ -11,7 +11,7 @@ standalone) with its own `milvus.yaml` mounted into the container.
 ## Layout
 
 - `2.6/` — `milvusdb/milvus:v2.6.25`
-- `master/` — `milvusdb/milvus:master-20260825-dd1ee671` (nightly)
+- `3.0/` — `milvusdb/milvus:v3.0.3`
 
 Both variants mount `<variant>/milvus.yaml` to `/milvus/configs/milvus.yaml`
 and persist data under `<variant>/volumes/`. That `volumes/` directory is
@@ -26,49 +26,47 @@ Both compose projects use the **same fixed container names**
 Only one variant can run at a time. **Never start a second server while one
 is already running.**
 
-## Pre-start check (mandatory)
+## Auto-switch policy (decide before doing anything)
 
-Before any `docker compose up -d`, check whether a Milvus server (plus its
-etcd/MinIO) is already running — this includes servers started from outside
-this skill:
+Always start from the *requested variant* (what the caller needs: `2.6` or
+`3.0`), then inspect what is actually running:
 
 ```bash
 docker ps --filter name=milvus-
 ```
 
-Then decide:
+A running `milvus-standalone` container is identified by its image tag
+(`milvusdb/milvus:v2.6.25` → `2.6` variant, `milvusdb/milvus:v3.0.3` → `3.0`
+variant). Then decide:
 
-- **A Milvus server container is up and healthy**
-  (`curl -sf http://localhost:9091/healthz`) → **do NOT start anything.**
-  Reuse the running server and tell the user which one is active (the image
-  tag identifies the variant). If it is not the variant the user wanted, ask
-  before switching — never stop a healthy server on your own initiative.
-- **A Milvus server container is up but unhealthy** → report the failure and
-  inspect `docker logs milvus-standalone --tail 100` before considering a
-  restart; do not blindly start another instance.
-- **Nothing Milvus-related is running** → proceed to start the requested
-  variant. If stray `milvus-etcd`/`milvus-minio` containers linger from a
-  previous run, `cd` into the variant directory that owns them and
-  `docker compose down` first (their data volumes are preserved):
+| Running variant | Requested variant | Action |
+|---|---|---|
+| `2.6` (healthy) | `3.0` | **Auto-switch**: `cd 2.6 && docker compose down`, then start `3.0`. Do not ask. |
+| `3.0` (healthy) | `2.6` | **Do NOT switch.** Reuse the running `3.0` server — 3.0 is backward compatible and supports every 2.6 feature. |
+| same as requested | same as requested | Reuse; do nothing. |
+| nothing running | either | Start the requested variant. |
+| any variant, unhealthy | either | Do not start another instance. Report and inspect `docker logs milvus-standalone --tail 100` first. |
 
-  ```bash
-  cd <owning-variant-dir> && docker compose down
-  ```
+A server is healthy when `curl -sf http://localhost:9091/healthz` prints OK.
 
 ## Start a variant
 
 ```bash
-cd milvus-server-launch/2.6     # or milvus-server-launch/master
+cd milvus-server-launch/2.6     # or milvus-server-launch/3.0
 docker compose up -d
 ```
 
-Then wait for health (compose healthcheck has a 90s start period):
+Wait for health (compose healthcheck has a 90s start period):
 
 ```bash
 curl -sf http://localhost:9091/healthz   # prints OK when ready
 ```
 
 When healthy, Milvus is reachable at `localhost:19530`.
+
+If stray `milvus-etcd`/`milvus-minio` containers linger from a previous run,
+`cd` into the variant directory that owns them and `docker compose down`
+first (their data volumes are preserved).
 
 ## Common operations
 

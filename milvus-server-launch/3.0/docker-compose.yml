@@ -42,7 +42,7 @@ services:
 
   standalone:
     container_name: milvus-standalone
-    image: milvusdb/milvus:master-20260825-dd1ee671
+    image: milvusdb/milvus:v3.0.3
     user: "0:0"
     command: ["milvus", "run", "standalone"]
     security_opt:
