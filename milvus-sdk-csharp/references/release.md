@@ -31,8 +31,10 @@ expected external effect.
 
 At the time this skill was written:
 
-- Package version is in `Version.props` (`<Version>X.Y.Z</Version>`), imported via `Directory.Build.props`.
-- `Changelog.md` records user-visible release history; it is the release-notes source of truth.
+- `Version.props` contains the default build/package version and is imported via
+  `Directory.Build.props`. During release preparation, set it to `X.Y.Z-beta.1` for the next stable
+  release `X.Y.Z`. The stable publishing workflow later rewrites it to `X.Y.Z` from the `vX.Y.Z` tag.
+- `CHANGELOG.md` records user-visible release history; it is the release-notes source of truth.
 - Two NuGet packages are produced: `Milvus.Client` (V1) and `Milvus.Client.V2` (V2). Both multi-target
   `net8.0;netstandard2.0;net462`.
 - `.github/workflows/NugetPublish.yml` is the tag-driven NuGet publishing workflow (triggered by `v*.*.*`
@@ -55,20 +57,44 @@ git submodule status
 
 ## Version sources
 
-- `Version.props`: the package version used by both projects.
+- `Version.props`: the default package version used by both projects. Treat the Git tag as the
+  authoritative version for a release.
 - `Milvus.Client.V2.csproj`: `PackageId=Milvus.Client.V2`, `AssemblyName`, `RootNamespace`.
-- `Changelog.md`: user-facing release history.
+- `CHANGELOG.md`: user-facing release history.
 - Git tags such as `vX.Y.Z`: published version markers.
+
+## Release version bump
+
+When preparing a new release, determine the next stable version `X.Y.Z` and set `Version.props` to the
+prerelease form of that version:
+
+```xml
+<Project>
+  <PropertyGroup>
+    <Version>X.Y.Z-beta.1</Version>
+  </PropertyGroup>
+</Project>
+```
+
+Important:
+
+- Omit the leading `v` from `Version.props`. The Git tag is `vX.Y.Z`, but the MSBuild/NuGet version is
+  `X.Y.Z`; the publishing workflow validates the tag version after stripping `v`.
+- Use `X.Y.Z-beta.N` only if multiple beta validation packages are needed; otherwise use `beta.1`.
+- This keeps local release-validation packages clearly distinct from the previous stable package while
+  README and `CHANGELOG.md` can continue to describe the upcoming stable `X.Y.Z` release.
+- The current `NugetPublish.yml` accepts stable `vX.Y.Z` tags only. Do not push a `vX.Y.Z-beta.N` tag
+  unless the workflow is explicitly changed to support prerelease publishing.
 
 ## Changelog
 
-`Changelog.md` is the source of truth for user-visible release contents. It lists dated version
+`CHANGELOG.md` is the source of truth for user-visible release contents. It lists dated version
 entries with feature/fix bullet points. When preparing a release:
 
 1. Read the existing changelog before adding an entry.
 2. Add a new dated entry near the top following the repository's existing format, e.g.
    `- YYYY-MM-DD **X.Y.Z**` with concise user-visible bullets.
-3. Keep ordinary feature and bug-fix work out of `Changelog.md` unless the user explicitly asks for
+3. Keep ordinary feature and bug-fix work out of `CHANGELOG.md` unless the user explicitly asks for
    release preparation or a changelog update.
 4. Derive entries from implementation commits since the preceding release, not only version-bump or
    marker commits.
@@ -90,6 +116,23 @@ Inspect `Artifacts/*.nupkg` / `*.snupkg` and verify:
 
 The projects set `PublishRepositoryUrl`, `IncludeSymbols` (`snupkg`), and `EmbedUntrackedSources` in
 `Directory.Build.props`, so packages carry source-link and symbol metadata automatically.
+
+### Local package versions
+
+Outside release preparation, do not edit `Version.props` merely to make a local test package look
+current. Override the version on the command line:
+
+```bash
+local_version="2.6.1-local.$(date +%Y%m%d%H%M%S)"
+dotnet pack -c Release -o Artifacts -p:Version="$local_version"
+```
+
+This produces clearly distinguishable local artifacts, such as `Milvus.Client.V2.2.6.1-local.20261020...`
+and its symbol package, without dirtying the source tree. Verify the resulting nupkg version with
+`ls Artifacts` or by inspecting the package metadata.
+
+During release preparation, `dotnet pack -c Release -o Artifacts` should produce `X.Y.Z-beta.1`
+packages from the version bump described above.
 
 ## Publishing workflow
 
@@ -117,7 +160,12 @@ If publishing manually, confirm authentication and use the repository's `nuget.c
 
 1. Confirm the release branch and cleanly separate unrelated user changes.
 2. Inspect the previous tag/marker and all commits in the release window.
-3. Update `Changelog.md` and any version metadata.
-4. Run the test suites (unit, mock integration, and server-backed system when authorized).
-5. Build `-c Release` and run `dotnet pack` to validate artifacts.
-6. Do not mutate remote state (tags, branches, NuGet, GitHub releases) without explicit authorization.
+3. Set `Version.props` to `<Version>X.Y.Z-beta.1</Version>` for the next stable version `X.Y.Z`.
+4. Update `CHANGELOG.md`, README compatibility/NuGet version metadata, and consumer examples or
+   tutorials when their pinned package version is part of the release preparation. Unless explicitly
+   preparing a beta release, user-facing docs should reference the upcoming stable `X.Y.Z`, not
+   `X.Y.Z-beta.1`.
+5. Run the test suites (unit, mock integration, and server-backed system when authorized).
+6. Build `-c Release` and run `dotnet pack` to validate artifacts; verify the artifact version is
+   `X.Y.Z-beta.1`.
+7. Do not mutate remote state (tags, branches, NuGet, GitHub releases) without explicit authorization.

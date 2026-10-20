@@ -33,6 +33,22 @@ dotnet build -c Release                   # release
 dotnet build -p:DeveloperBuild=True       # net8.0-only fast build
 ```
 
+## Local package versions
+
+For ordinary local packages outside release preparation, do not edit `Version.props`. Pass an explicit
+MSBuild version instead:
+
+```bash
+local_version="2.6.1-local.$(date +%Y%m%d%H%M%S)"
+dotnet pack -c Release -o Artifacts -p:Version="$local_version"
+```
+
+The `-p:Version=` global property overrides the value imported from `Version.props`, so local
+artifacts can be distinguished from published packages without dirtying the working tree.
+
+During release preparation, follow the release workflow and set `Version.props` to
+`X.Y.Z-beta.1`; local packs then produce the intended prerelease version without another override.
+
 ## Test layout
 
 `dotnet test` runs all projects in the solution. Filter to a project with `--project`, and to a
