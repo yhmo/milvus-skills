@@ -25,3 +25,6 @@ milvus-server-launch/*/volumes/
 *_debug_tmp.*
 *_tmp.*
 *.tmp
+
+# ...except the skill's cleanup utility, whose name merely contains _tmp
+!update-user-guide-snippet/scripts/cleanup_tmp.py

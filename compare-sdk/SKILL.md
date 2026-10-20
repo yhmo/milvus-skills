@@ -63,7 +63,24 @@ For each of the two SDKs:
    `git show refs/remotes/source/[branch]:[path]` and enumerate files with
    `git ls-tree -r --name-only refs/remotes/source/[branch] [dir]`. Never
    switch or reset a dirty worktree to inspect a branch; if a full checkout is
-   ever required, use `git worktree add` with a temp path.
+   ever required, use `git worktree add` with a temp path created via
+   `mktemp -d "${TMPDIR:-/tmp}/compare-sdk.XXXXXX"` (keep the path in a run
+   variable — it must be removed at the end of the run, see "Working
+   artifacts and cleanup" below).
+
+### Working artifacts and cleanup
+
+- The exported `[sdk1]_[sdk2]_[branch]_gaps_<timestamp>.md` report in the
+  session cwd is the **only** retained artifact of a run.
+- Everything else must be read-only analysis: pin all reads via
+  `git show`/`git ls-tree` on `refs/remotes/source/[branch]`; do not write
+  extraction files, notes, or scratch scripts into the user's cwd.
+- If the run created a temporary `git worktree`, it is a one-off artifact:
+  before sending the final response, remove it with
+  `git worktree remove --force <path>` (then `git worktree prune` to clear the
+  leftover `.git/worktrees/<name>` administrative entry inside the SDK repo).
+  Only remove a worktree this run itself created — never a pre-existing
+  checkout or another session's worktree.
 
 ### Step 2 - Interface comparison
 
@@ -365,6 +382,8 @@ Mechanism 3 - Retry policy (RPC failure handling):
   `.proto` files; only generated `pymilvus/grpc_gen/*.py`.
 - Do not mutate any repository worktree; all reads must be pinned via
   `git show`/`git ls-tree` on `refs/remotes/source/[branch]`.
+- Completion check: if the run created a temporary `git worktree`, confirm it
+  was removed (`git worktree list` no longer shows it) before reporting done.
 - Verify every path before using it; when the two SDKs are resolved, also load
   the matching per-SDK skills (pymilvus, milvus-sdk-java, milvus-sdk-cpp,
   milvus-sdk-csharp, milvus-sdk-rust) for repo-specific detail, but trust

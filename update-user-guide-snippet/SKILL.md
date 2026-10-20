@@ -450,7 +450,8 @@ Updating a document WITHOUT the corresponding SDK skill risks API deviations
     It reads the fetch XML, extracts every `<pre lang="...">` block, undoes the
     XML escaping (`&lt;`→`<`, `&gt;`→`>`, `&amp;`→`&`, `<br/>`→newline, drops
     `<em>`), writes each to `sdk-tmp/snippet-check/`, and runs the per-language
-    parse check.
+    parse check. That directory is per-run scratch — it is removed by Step 8's
+    `scripts/cleanup_tmp.py` when the task ends.
 
     **API-existence cross-check (soft findings) — pass `--api-index` and one
     `--sdk-tag sdk@tag` per SDK present in the document** to have the check
@@ -632,7 +633,8 @@ Updating a document WITHOUT the corresponding SDK skill risks API deviations
        ```lang blocks in document order), e.g.
        `scripts/fetch_to_md.py <docx> --out sdk-tmp/snippet-run/<doc>.md`.
        Apply the localhost substitution and the `consistency_level=Strong`
-       workaround (both above) to this extracted copy before running.
+       workaround (both above) to this extracted copy before running. All of
+       `sdk-tmp/snippet-run/` is per-run scratch, cleaned at Step 8.
      - **Probe** whether a Milvus server is reachable first:
        `python3 -c "from pymilvus import connections; connections.connect(host='localhost', port=19530, token='root:Milvus'); connections.disconnect('default')"`
        or probe the REST health endpoint `curl -s http://localhost:9091/healthz`.
@@ -733,6 +735,43 @@ Updating a document WITHOUT the corresponding SDK skill risks API deviations
    - no non-code content was changed.
  7. **Report** a per-document/per-block change list for review, including which
     syntax checks passed/skipped and any unsupported features recorded per SDK.
+ 8. **Clean up one-off temp artifacts** (end of every run, mandatory):
+   `python3 scripts/cleanup_tmp.py` — deletes `sdk-tmp/snippet-check/` and
+   `sdk-tmp/snippet-run/` (both are per-run snapshots of the Feishu docs and
+   are regenerated next run). The reusable caches `sdk-tmp/api-index/` and
+   `sdk-tmp/sdks/` are preserved. Use `--dry-run` first if unsure what would
+   be removed; add `--deep` to also sweep ad-hoc scratch files a session
+   dropped directly under `sdk-tmp/` (payload XMLs, one-off fix files, ...).
+   See "Temporary files & cleanup" below.
+
+## Temporary files & cleanup
+
+The run writes local artifacts under `sdk-tmp/`. They fall into two classes:
+
+- **Reusable caches — kept after the run:**
+  - `sdk-tmp/api-index/<sdk>-<tag>.tsv` — API index per SDK@tag; a git tag is
+    immutable, so a generated index is valid forever. Regenerating costs a
+    full repo scan, so never delete these at end of run.
+  - `sdk-tmp/sdks/<repo>` — fallback SDK clones (only used when
+    `$HOME/work/git-go/<repo>` is absent); they persist and are refreshed with
+    a cheap `git fetch --tags` on the next run.
+- **One-off artifacts — deleted at end of run** (Step 8, via
+  `scripts/cleanup_tmp.py`):
+  - `sdk-tmp/snippet-check/` — extracted snippet files for the parse checks;
+    a stale copy of a since-edited Feishu doc is meaningless to the next run.
+  - `sdk-tmp/snippet-run/` — extracted markdown pages and the per-language
+    runner project dirs (go/java/rust/cpp); regenerated and re-patched
+    (localhost substitution, `consistency_level=Strong`) every real run.
+
+`cleanup_tmp.py` only ever deletes directories named `snippet-check` or
+`snippet-run` directly inside a `sdk-tmp` dir — anything else under
+`sdk-tmp` is untouched in the default mode. With `--deep` it additionally
+removes every other entry directly under `sdk-tmp` (ad-hoc scratch such as
+`*-payload.xml` or one-off fix files), while `api-index/` and `sdks/` are
+always preserved in both modes, and hidden entries (dotfiles) are never
+touched. If the skill must abort early (auth failure, missing SDK skills,
+user cancel), run the same cleanup before stopping so no stale snapshot is
+left behind.
 
 ## Pushing / PR
 
