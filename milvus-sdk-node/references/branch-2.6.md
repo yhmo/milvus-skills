@@ -12,10 +12,12 @@ git branch --show-current
 
 ## Package version and dependencies
 
-| | 2.6 | main (baseline) |
-| --- | --- | --- |
-| `version` | `2.6.17` | `3.0.6` |
-| `milvusVersion` | `v2.6.17` | `v3.0.0` |
+The package `version` and target server line (`milvusVersion`) differ between
+branches. Read the current values from `package.json` rather than assuming:
+
+```bash
+grep -E '"version"|"milvusVersion"' package.json
+```
 
 ## Directories absent from 2.6
 

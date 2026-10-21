@@ -10,13 +10,13 @@ Use this reference when the user asks about release history, version bumps, npm 
 
 ## Version bump convention
 
-A release usually starts with a `chore: bump version to X.Y.Z` commit that only changes `package.json` `version` (see commit `854b78d` for `3.0.5`). Feature work stays in separate commits before the bump.
+A release usually starts with a `chore: bump version to X.Y.Z` commit that only changes `package.json` `version` (see the latest `chore: bump version` commit on the target branch for an example). Feature work stays in separate commits before the bump.
 
 ## User-visible release notes
 
 - Release notes are written in `docs/src/content/docs/reference/release-notes.mdx` (not a root `CHANGELOG.md`).
 - Each release section lists user-visible features/improvements/fixes and links to the GitHub compare URL (`compare/v<PREV>...v<NEXT>`).
-- Documentation updates that describe new features usually land with or right after the feature commits (for example `docs: update guides for SDK 3.0.5`).
+- Documentation updates that describe new features usually land with or right after the feature commits (for example `docs: update guides for SDK X.Y.Z`).
 - Derive notes from implementation commits and docs diffs since the previous tag, not only from the version-bump commit.
 - Keep ordinary feature/bug-fix work out of release metadata unless the user explicitly asks for release preparation.
 
