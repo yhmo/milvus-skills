@@ -14,6 +14,11 @@ Use this skill only for `milvus-io/milvus-sdk-java`.
 - Use remote `source` as upstream when it points to `milvus-io/milvus-sdk-java`.
 - Treat `source/master` as the current design baseline. Treat legacy release branches as maintenance lines whose source layout and supported APIs may differ.
 - **Version branch model**: absent a dedicated major-version branch, `master` is both the development branch and the release branch for the newest supported Milvus major — `x.y.z` releases for that major are cut directly from it. When the SDK advances to a newer major (3.1/4.0), a branch for the current major (e.g. `3.0`) is forked from `master` and `master` follows the new major. Java already carries a `3.0` branch; today it tracks `master` and is used for 3.0-line stabilization, and it will diverge once the dev branch advances to a newer Milvus major (3.1/4.0). Each prior major line keeps a maintenance branch (`2.6` for Milvus 2.6). Always verify the branch-to-Milvus-version mapping from Git rather than assuming a branch name implies a server line.
+- **Branch overlay**: the other references describe the `master`/`3.0` baseline. If `git branch --show-current` returns `2.6`, you MUST read [references/branch-2.6.md](references/branch-2.6.md) before applying any knowledge from the baseline references. On `2.6`, these baseline items do **not** exist:
+  `tutorial/` · `scripts/` · `AGENTS.md` · `io.milvus.telemetry` · `MilvusClientV2Session` · `SnapshotService` and all snapshot types ·
+  `FunctionChain*` / aggregation types (`SearchAggregation`, `AggregationBucket`, `AggregationHit`, `TopHitsSpec`, …) · `CompactionTaskState` / `CompactionType` ·
+  `MilvusClientV2` snapshot / RLS / row-policy / file-resource / external-collection / session / telemetry / compaction / struct-field / function-field methods ·
+  pre-v3.0.9 flat test layout (not `unit/`/`integration/`/`system/`; `DockerTest` uses Testcontainers, not docker compose).
 - **Stale-working-tree guard**: the checked-out branch (even after `git fetch`) may be old while fetched upstream refs are current. For analysis and tracing, prefer reading source pinned to the relevant upstream branch — `git show refs/remotes/[remote]/[branch]:[path]` and `git ls-tree -r --name-only refs/remotes/[remote]/[branch] [dir]` — where `[remote]` is the remote that points at the native repo (milvus-io or zilliztech), whether it is named `source` or `origin`; confirm it with `git remote -v`, and check the branch set with `git branch --show-current`. Fetch the native remote first when freshness matters (`git fetch [remote]`), because remote-tracking refs can themselves be stale. Before editing, make sure the working tree is on the intended branch and in sync; never edit blindly on an old branch.
 - Do not switch, reset, or overwrite a dirty worktree to inspect another branch. Use `git show`, `git ls-tree`, or a clean secondary checkout/worktree.
 
@@ -24,6 +29,7 @@ Read each selected reference completely before acting:
 - Architecture and runtime dataflow: [references/technical-details.md](references/technical-details.md)
 - Package and file routing: [references/source-layout.md](references/source-layout.md)
 - Build, proto generation, and tests: [references/build-and-test.md](references/build-and-test.md)
+- 2.6 branch overlay: [references/branch-2.6.md](references/branch-2.6.md)
 - Examples: [references/examples.md](references/examples.md)
 - Benchmarks: [references/benchmark.md](references/benchmark.md)
 - Releases and publishing: [references/release.md](references/release.md)
@@ -38,6 +44,8 @@ For architecture or implementation work, normally read both `technical-details.m
 2. Trace the public method in `MilvusClientV2` through `RpcUtils.retry` (blocking) or `RpcUtils.retryAsync` (async DQL), the owning domain service, request/protobuf conversion, the blocking stub call (`MilvusServiceBlockingStub`) or future stub call (`MilvusServiceFutureStub`), and response conversion.
 3. Inspect shared cache, iterator, connection, or global-cluster code when the operation crosses those boundaries.
 4. Verify branch-specific behavior from source; do not assume master behavior exists on maintenance branches.
+
+Before applying architecture, API, or test-layout knowledge, run `git branch --show-current`. If on the `2.6` branch, you MUST read [references/branch-2.6.md](references/branch-2.6.md) before proceeding, and follow its missing-symbol and pre-v3.0.9 test-layout rules.
 
 ### Diagnose or change code
 

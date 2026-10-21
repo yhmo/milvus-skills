@@ -32,7 +32,7 @@ if ! grep -q '^description: ' "$skill_dir/SKILL.md"; then
 fi
 
 missing=0
-for ref in technical-details.md build-and-test.md branch-differences.md examples.md benchmark.md release.md; do
+for ref in technical-details.md build-and-test.md branch-2.6.md examples.md benchmark.md release.md; do
   if [[ ! -f "$skill_dir/references/$ref" ]]; then
     echo "ERROR: Missing references/$ref" >&2
     missing=1

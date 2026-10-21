@@ -16,7 +16,12 @@ Repo-specific workflows for the Milvus Python SDK. This is not a general Python 
   3. `/home/runner/work/pymilvus/pymilvus` (GitHub Actions runner `$GITHUB_WORKSPACE`).
 - Confirm the checkout with `git rev-parse --show-toplevel` and `git remote -v` before relying on it. Do not assume the preferred path exists or is the correct repository without verification.
 - **Version branch model**: `master` is the dev branch and tracks the newest supported Milvus major release (currently 3.0). Each prior major line keeps a maintenance branch (`2.6` for Milvus 2.6, plus older `2.x` lines). PyMilvus already carries a `3.0` branch; today it tracks `master` and is used for 3.0-line stabilization, and it will diverge once the dev branch advances to a newer Milvus major (3.1/4.0). Always verify the branch-to-Milvus-version mapping from Git rather than assuming a branch name implies a server line.
-- **Branch differences**: the `2.6` maintenance branch differs significantly from `master`/`3.0` in package layout (`function_chain/`, `bloom_filter.py`, `roaring_filter.py`, `search_aggregation.py` are absent), public API exports (13 fewer names), `MilvusClient`/`AsyncMilvusClient` method coverage (~30 fewer methods including snapshots, segments, file resources), Python version floor (3.8 vs 3.9), and proto submodule pin. See [references/branch-differences.md](references/branch-differences.md) for the full comparison table and rules.
+- **Branch overlay**: the other references describe the `master`/`3.0` baseline. If `git branch --show-current` returns `2.6`, you MUST read [references/branch-2.6.md](references/branch-2.6.md) before applying any knowledge from the baseline references. On `2.6`, these baseline items do **not** exist:
+  `pymilvus/function_chain/` · `client/bloom_filter.py` · `client/roaring_filter.py` · `client/search_aggregation.py` ·
+  `FunctionChain` / `FunctionChainStage` / `BloomFilterBuilder` / `build_bloom_filter` / `RoaringBitmapBuilder` / `build_roaring_bitmap` / `SearchAggregation` / `AggregationBucket` / `AggregationHit` / `TopHits` ·
+  `CompactionTaskState` / `CompactionType` / `SegmentState` ·
+  snapshot / session / segment / compaction / struct-field / function-field / file-resource / external-collection `MilvusClient` and `AsyncMilvusClient` methods ·
+  Python 3.9+ syntax (2.6 requires `>=3.8`).
 - **Stale-working-tree guard**: the checked-out branch (even after `git fetch`) may be old while fetched upstream refs are current. For analysis and tracing, prefer reading source pinned to the relevant upstream branch — `git show refs/remotes/[remote]/[branch]:[path]` and `git ls-tree -r --name-only refs/remotes/[remote]/[branch] [dir]` — where `[remote]` is the remote that points at the native repo (milvus-io or zilliztech), whether it is named `source` or `origin`; confirm it with `git remote -v`, and check the branch set with `git branch --show-current`. Fetch the native remote first when freshness matters (`git fetch [remote]`), because remote-tracking refs can themselves be stale. Before editing, make sure the working tree is on the intended branch and in sync; never edit blindly on an old branch.
 
 ## References
@@ -25,7 +30,7 @@ Read the relevant one-level reference before acting:
 
 - Technical design: [references/technical-details.md](references/technical-details.md)
 - Build and test: [references/build-and-test.md](references/build-and-test.md)
-- Branch differences (2.6 vs 3.0): [references/branch-differences.md](references/branch-differences.md)
+- 2.6 branch overlay: [references/branch-2.6.md](references/branch-2.6.md)
 - Examples: [references/examples.md](references/examples.md)
 - Benchmarks: [references/benchmark.md](references/benchmark.md)
 - Release and publish: [references/release.md](references/release.md)
@@ -54,7 +59,7 @@ scripts/validate-skill.sh "$(pwd)"
 ## Rules
 
 - Verify current files before acting; this skill records repo state observed at authoring time.
-- Run `git branch --show-current` before applying architecture, API, or dependency knowledge. If on the `2.6` branch, consult [references/branch-differences.md](references/branch-differences.md) for symbols, directories, and Python-version constraints that differ from the unified `master`/`3.0` descriptions.
+- Run `git branch --show-current` before applying architecture, API, or dependency knowledge. If on the `2.6` branch, you MUST read [references/branch-2.6.md](references/branch-2.6.md) before proceeding, and follow its Python 3.8 compatibility and missing-symbol rules.
 - Prefer the new `MilvusClient` layer for new high-level SDK features.
 - Touch legacy `orm/` only for compatibility or explicit legacy API work.
 - Do not edit generated `pymilvus/grpc_gen/*` files by hand; use the proto generation workflow.
