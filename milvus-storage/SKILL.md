@@ -18,6 +18,8 @@ or a client SDK except when comparing behavior.
 5. Classify the request as explanation, diagnosis, targeted change, cross-component change, or generation before acting.
    Do not implement a fix for a diagnosis-only request.
 6. Search with `rg` or run `scripts/api-trace.sh`; do not infer an implementation path from filenames alone.
+- **Version branch model**: `main` is the active development line; `3.0` and `2.6` are the current released maintenance lines. The `cpp/`, `python/`, `java/`, and `rust/` source trees are identical across branches — differences are limited to top-level project files (`2.6` lacks `Makefile`, `codecov.yml`, `docs/`, `tests/`, and `examples/`; `3.0` additionally lacks `examples/`). See [references/branch-differences.md](references/branch-differences.md).
+- **Branch overlay**: the other references describe the `main` baseline. If `git branch --show-current` returns `3.0` or `2.6`, read [references/branch-differences.md](references/branch-differences.md) for top-level files that differ. On `2.6`, build/test commands that rely on the top-level `Makefile` do not apply — use the per-language build system directly (`cpp/Makefile` for C++).
 7. **Stale-working-tree guard**: the checked-out branch (even after `git fetch`) may be old while fetched upstream refs are current. For analysis and tracing, prefer reading source pinned to the relevant upstream branch — `git show refs/remotes/[remote]/[branch]:[path]` and `git ls-tree -r --name-only refs/remotes/[remote]/[branch] [dir]` — where `[remote]` is the remote that points at the native repo (milvus-io or zilliztech), whether it is named `source` or `origin`; confirm it with `git remote -v`, and check the branch set with `git branch --show-current`. Fetch the native remote first when freshness matters (`git fetch [remote]`), because remote-tracking refs can themselves be stale. Before editing, make sure the working tree is on the intended branch and in sync; never edit blindly on an old branch.
 
 ## Load the relevant reference
@@ -26,6 +28,8 @@ or a client SDK except when comparing behavior.
   FFI (`extern "C"`) boundary and error taxonomy, format and filesystem layers, and change checklists.
 - Read [references/build-and-test.md](references/build-and-test.md) before configuring, building, testing, linting, or
   debugging CI. C++ builds go through Conan 2 + CMake via the `cpp/Makefile`.
+- Read [references/branch-differences.md](references/branch-differences.md) when working on the `3.0`/`2.6` maintenance
+  branches.
 - Read [references/examples.md](references/examples.md) before changing or running benchmarks or examples.
 - Read [references/release.md](references/release.md) for version preparation, package metadata, tags, and release
   workflows.

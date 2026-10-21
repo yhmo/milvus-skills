@@ -13,6 +13,7 @@ Work from repository evidence. This skill is a workflow and navigation layer, no
 - Locate the repository checkout in this order: `$HOME/work/git-go/milvus-common` when it exists on this machine; a directory named `milvus-common` among the parent directories of the current working directory; `/home/runner/work/milvus-common/milvus-common` (GitHub Actions runner `$GITHUB_WORKSPACE`).
 - Confirm the checkout with `git rev-parse --show-toplevel` and `git remote -v` before relying on it. Do not assume the preferred path exists or is the correct repository without verification.
 - `master` is the active development line. Legacy lines such as `v1.x` or `2.6` are maintained upstream; confirm the target branch from Git rather than assuming it matches `master`.
+- **Branch overlay**: the differences between `master` and `2.6` are minimal — `2.6` lacks `src/cachinglayer/LoadingOverhead.cpp`, the top-level `Makefile`, `OWNERS`, and `docs/`. See [references/branch-differences.md](references/branch-differences.md). If `git branch --show-current` returns `2.6`, read that overlay before applying baseline knowledge.
 - **Stale-working-tree guard**: the checked-out branch (even after `git fetch`) may be old while fetched upstream refs are current. For analysis and tracing, prefer reading source pinned to the relevant upstream branch — `git show refs/remotes/[remote]/[branch]:[path]` and `git ls-tree -r --name-only refs/remotes/[remote]/[branch] [dir]` — where `[remote]` is the remote that points at the native repo (milvus-io or zilliztech), whether it is named `source` or `origin`; confirm it with `git remote -v`, and check the branch set with `git branch --show-current`. Fetch the native remote first when freshness matters (`git fetch [remote]`), because remote-tracking refs can themselves be stale. Before editing, make sure the working tree is on the intended branch and in sync; never edit blindly on an old branch.
 
 ## Start every task
@@ -25,6 +26,7 @@ Work from repository evidence. This skill is a workflow and navigation layer, no
    - Component layout and behavior: [references/architecture.md](references/architecture.md)
    - Build, test, lint, and platform quirks: [references/build-and-test.md](references/build-and-test.md)
    - Conventions, error codes, and change rules: [references/change-rules.md](references/change-rules.md)
+   - Branch differences (2.6 vs master): [references/branch-differences.md](references/branch-differences.md)
 
 ## Investigate before acting
 

@@ -11,6 +11,17 @@ required=(
   "scripts/validate-skill.sh"
 )
 
+for ref in technical-details.md build-and-test.md branch-differences.md; do
+  if [[ ! -f "$skill_dir/references/$ref" ]]; then
+    echo "error: required reference is missing: references/$ref" >&2
+    exit 1
+  fi
+  if ! grep -F "references/$ref" "$skill_dir/SKILL.md" >/dev/null; then
+    echo "error: SKILL.md does not link references/$ref" >&2
+    exit 1
+  fi
+done
+
 for path in "${required[@]}"; do
   if [[ ! -f "$skill_dir/$path" ]]; then
     echo "missing: $path" >&2

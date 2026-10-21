@@ -16,6 +16,10 @@ Work from repository evidence. Treat this skill as a workflow and navigation lay
   2. a directory named `knowhere` among the parent directories of the current working directory;
   3. `/home/runner/work/knowhere/knowhere` (GitHub Actions runner `$GITHUB_WORKSPACE`).
 - Confirm the checkout with `git rev-parse --show-toplevel` and `git remote -v` before relying on it. Do not assume the preferred path exists or is the correct repository without verification.
+- **Version branch model**: `main` is the active development line; `3.0` and `2.6` are the current released maintenance lines. The branches differ significantly in index coverage: `main` adds the sparse inverted-index rewrite (codec/searcher/SINDI), SVS index, faiss direct integration, emb-list strategies, MRL index, clustering kmeans, build scheduler, and SIMD LSX/LASX — most of which are absent from maintenance branches. See [references/branch-differences.md](references/branch-differences.md) for the full comparison.
+- **Branch overlay**: the other references describe the `main` baseline. If `git branch --show-current` returns `3.0` or `2.6`, you MUST read [references/branch-differences.md](references/branch-differences.md) before applying any knowledge from the baseline references. On `3.0`/`2.6`, these baseline items do **not** exist:
+  sparse codec (`src/index/sparse/codec/`) · sparse searcher (`src/index/sparse/searcher/`) · SINDI variants · SVS index · `src/index/faiss/` · emb-list strategies · MRL index (`mrl_index_node`) · clustering kmeans · `build_scheduler` · `cancellation` · SIMD LSX/LASX.
+  `2.6` additionally lacks the HNSW/IVF RaBitQ wrappers present on `3.0`.
 - **Stale-working-tree guard**: the checked-out branch (even after `git fetch`) may be old while fetched upstream refs are current. For analysis and tracing, prefer reading source pinned to the relevant upstream branch — `git show refs/remotes/[remote]/[branch]:[path]` and `git ls-tree -r --name-only refs/remotes/[remote]/[branch] [dir]` — where `[remote]` is the remote that points at the native repo (milvus-io or zilliztech), whether it is named `source` or `origin`; confirm it with `git remote -v`, and check the branch set with `git branch --show-current`. Fetch the native remote first when freshness matters (`git fetch [remote]`), because remote-tracking refs can themselves be stale. Before editing, make sure the working tree is on the intended branch and in sync; never edit blindly on an old branch.
 
 ## Start every task
@@ -27,6 +31,7 @@ Work from repository evidence. Treat this skill as a workflow and navigation lay
 5. Read the relevant one-level reference:
    - Architecture, source layout, index types, and dependencies: [references/technical-details.md](references/technical-details.md)
    - Build, test, lint, and wheel commands: [references/build-and-test.md](references/build-and-test.md)
+   - Branch differences (2.6 vs 3.0 vs main): [references/branch-differences.md](references/branch-differences.md)
 
 ## Investigate before acting
 

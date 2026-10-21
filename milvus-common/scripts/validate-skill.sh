@@ -21,6 +21,7 @@ required=(
   "references/architecture.md"
   "references/build-and-test.md"
   "references/change-rules.md"
+  "references/branch-differences.md"
   "scripts/validate-skill.sh"
 )
 
@@ -41,7 +42,7 @@ if ! search '^name: milvus-common$' "$skill_dir/SKILL.md"; then
   exit 1
 fi
 
-for ref in architecture build-and-test change-rules; do
+for ref in architecture build-and-test change-rules branch-differences; do
   if ! search "references/${ref}.md" "$skill_dir/SKILL.md"; then
     echo "SKILL.md does not link references/${ref}.md" >&2
     exit 1

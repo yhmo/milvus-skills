@@ -15,6 +15,8 @@ Work from repository evidence. Treat this skill as a workflow and navigation lay
   2. a directory named `cardinal` among the parent directories of the current working directory;
   3. `/home/runner/work/cardinal/cardinal` (GitHub Actions runner `$GITHUB_WORKSPACE`).
 - Confirm the checkout with `git rev-parse --show-toplevel` and `git remote -v` before relying on it. `source` is normally the upstream `zilliztech/cardinal` remote; `origin` is usually the user's fork. Do not assume the preferred path exists or is the correct repository without verification.
+- **Version branch model**: `master` is the active development line; `2.6` is the current released maintenance line (plus legacy `v1`/`v2` lines). Differences are minimal: `master` adds the `aquila/` directory and a top-level `Makefile`; `2.6` retains the `cmake/` directory that `master` removed. See [references/branch-differences.md](references/branch-differences.md).
+- **Branch overlay**: the other references describe the `master` baseline. If `git branch --show-current` returns `2.6`, read [references/branch-differences.md](references/branch-differences.md) before applying baseline knowledge. On `2.6`, the `aquila/` directory does not exist and CMake configuration comes from `cmake/`.
 - **Stale-working-tree guard**: the checked-out branch (even after `git fetch`) may be old while fetched upstream refs are current. For analysis and tracing, prefer reading source pinned to the relevant upstream branch — `git show refs/remotes/[remote]/[branch]:[path]` and `git ls-tree -r --name-only refs/remotes/[remote]/[branch] [dir]` — where `[remote]` is the remote that points at the native repo (milvus-io or zilliztech), whether it is named `source` or `origin`; confirm it with `git remote -v`, and check the branch set with `git branch --show-current`. Fetch the native remote first when freshness matters (`git fetch [remote]`), because remote-tracking refs can themselves be stale. Before editing, make sure the working tree is on the intended branch and in sync; never edit blindly on an old branch.
 
 ## Start every task
@@ -26,6 +28,7 @@ Work from repository evidence. Treat this skill as a workflow and navigation lay
 5. Read the relevant one-level references:
    - Architecture, layers, source layout, and change patterns: [references/technical-details.md](references/technical-details.md)
    - Build, test, lint, and generation commands: [references/build-and-test.md](references/build-and-test.md)
+   - Branch differences (2.6 vs master): [references/branch-differences.md](references/branch-differences.md)
 
 Run `scripts/repo-context.sh` when a quick current-checkout snapshot would help.
 
