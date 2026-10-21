@@ -60,6 +60,7 @@ required_references=(
   technical-details.md
   source-layout.md
   build-and-test.md
+  branch-2.6.md
   examples.md
   release.md
 )

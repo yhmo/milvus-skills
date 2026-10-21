@@ -14,6 +14,12 @@ Use this skill only for `milvus-io/milvus-sdk-node` (npm package `@zilliz/milvus
 - Upstream is normally `source` (`milvus-io/milvus-sdk-node`); `origin` is usually the user's fork.
 - `main` is the active development line targeting Milvus 3.0; legacy release lines `2.4`, `2.5`, `2.6`, and `v1.x` are maintained separately. Confirm the branch set from Git before assuming API parity with `main`.
 - **Version branch model**: the dev branch (`main`) tracks the newest supported Milvus major release (currently 3.0). Each prior major line keeps a maintenance branch (`2.6` for Milvus 2.6, and older lines like `2.5`/`2.4`). When the SDK advances to a newer Milvus major (3.1/4.0), the dev branch will follow it and a `3.0` branch will be created or frozen to serve Milvus 3.0 users (some other SDKs already carry a `3.0` branch that today tracks their dev line). Always verify the branch-to-Milvus-version mapping from Git rather than assuming a branch name implies a server line.
+- **Branch overlay**: the other references describe the `main` baseline. If `git branch --show-current` returns `2.6`, you MUST read [references/branch-2.6.md](references/branch-2.6.md) before applying any knowledge from the baseline references. On `2.6`, these baseline items do **not** exist:
+  `milvus/telemetry/` directory · `milvus/types/SearchAggregation.ts` / `Volume.ts` ·
+  `milvus/utils/BloomFilter.ts` / `RoaringFilter.ts` / `SearchAggregation.ts` ·
+  `MilvusClient.session(clusterId)` and `MilvusClientSession` ·
+  `milvus/index.ts` telemetry re-export ·
+  examples: `milvus/EntityTTL.ts`.
 - **Stale-working-tree guard**: the checked-out branch (even after `git fetch`) may be old while fetched upstream refs are current. For analysis and tracing, prefer reading source pinned to the relevant upstream branch — `git show refs/remotes/[remote]/[branch]:[path]` and `git ls-tree -r --name-only refs/remotes/[remote]/[branch] [dir]` — where `[remote]` is the remote that points at the native repo (milvus-io or zilliztech), whether it is named `source` or `origin`; confirm it with `git remote -v`, and check the branch set with `git branch --show-current`. Fetch the native remote first when freshness matters (`git fetch [remote]`), because remote-tracking refs can themselves be stale. Before editing, make sure the working tree is on the intended branch and in sync; never edit blindly on an old branch.
 - Do not switch, reset, or overwrite a dirty worktree to inspect another branch. Use `git show`, `git ls-tree`, or a clean secondary worktree.
 - The `proto` git submodule tracks the `3.0` branch of `milvus-io/milvus-proto`; check `git submodule status` before assuming a proto feature is present. It may be uninitialized (`-` prefix); initialize with `git submodule update --init --recursive`.
@@ -25,6 +31,7 @@ Read each selected reference completely before acting:
 - Architecture and runtime dataflow: [references/technical-details.md](references/technical-details.md)
 - Package and file routing: [references/source-layout.md](references/source-layout.md)
 - Build, proto generation, and tests: [references/build-and-test.md](references/build-and-test.md)
+- 2.6 branch overlay: [references/branch-2.6.md](references/branch-2.6.md)
 - Examples: [references/examples.md](references/examples.md)
 - Releases and publishing: [references/release.md](references/release.md)
 
@@ -37,13 +44,13 @@ For architecture or implementation work, normally read both `technical-details.m
 1. Run `scripts/api-trace.sh SYMBOL` from the repository root.
 2. Trace the public method in `MilvusClient` (`milvus/MilvusClient.ts`) or a domain module under `milvus/grpc/` through validation, protobuf conversion, and the `promisify` RPC dispatch (`milvus/utils/Function.ts`) that acquires a client from the `generic-pool` channel pool.
 3. Note where retry (`getRetryInterceptor`), global-cluster failover (`setPoolFailoverHandler`), and telemetry (`withTelemetryLogicalOperation`) wrap the call.
-4. For HTTP paths, trace the equivalent factory method in the relevant `milvus/http/<Domain>.ts` module (per-entity files such as `Collection.ts`, `Database.ts`, `Vector.ts`) which calls `POST`/`GET` on `HttpBaseClient`.
+4. For HTTP paths, trace the equivalent factory method in the relevant `milvus/http/` domain module (per-entity files such as `Collection.ts`, `Database.ts`, `Vector.ts`) which calls `POST`/`GET` on `HttpBaseClient`.
 5. Verify branch-specific behavior from source; do not assume `main` behavior exists on maintenance branches.
 
 ### Diagnose or change code
 
 1. Identify whether the path is the gRPC `MilvusClient` hierarchy, the HTTP `HttpClient` mixin, shared utils/types, BulkWriter, or telemetry.
-2. Put domain behavior in the owning `milvus/grpc/<Domain>.ts` module (per-class files; classes are chained by inheritance, e.g. the `Index` class lives in `MilvusIndex.ts`) or a `milvus/http/<Domain>.ts` factory mixin (functions are mixed into `HttpClient`).
+2. Put domain behavior in the owning `milvus/grpc/` domain module (per-class files; classes are chained by inheritance, e.g. the `Index` class lives in `MilvusIndex.ts`) or a `milvus/http/` factory mixin (functions are mixed into `HttpClient`).
 3. Keep request/response TypeScript types in `milvus/types/` and shared conversion helpers in `milvus/utils/`.
 4. Do not hand-edit `milvus/proto-json/*.ts`; regenerate them when `proto/` changes.
 5. Update focused tests beside the affected area (`test/grpc`, `test/http`, `test/utils`). Use server-backed tests only when real Milvus behavior is required.
