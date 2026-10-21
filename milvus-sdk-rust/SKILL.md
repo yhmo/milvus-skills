@@ -16,6 +16,7 @@ Maintain deprecated V1 compatibility and active V2 development as separate API s
 - Read only the relevant one-level reference before acting:
   - Architecture, protobuf boundaries, DML/DQL internals: [references/technical-details.md](references/technical-details.md)
   - Build, format, and tests: [references/build-and-test.md](references/build-and-test.md)
+  - 2.6 branch overlay: [references/branch-2.6.md](references/branch-2.6.md)
   - Examples: [references/examples.md](references/examples.md)
   - Release and packaging: [references/release.md](references/release.md)
 
@@ -24,6 +25,14 @@ Maintain deprecated V1 compatibility and active V2 development as separate API s
 - Treat C++/Java `master` as the current reference and their legacy release branch/checkouts as the legacy reference. Compare matching release lines.
 - The Rust SDK maintains a legacy compatibility line and the active current line; treat `main` as the active line. The `milvus-proto` submodule is pinned to a current Milvus proto reference so recent messages and RPCs are available; confirm the pin with `git submodule status` before assuming a feature is present or absent. Do not infer unimplemented newer-only APIs, fields, or behavior as legacy-line gaps.
 - **Version branch model**: absent a dedicated major-version branch, `main` is both the development branch and the release branch for the newest supported Milvus major — `x.y.z` releases for that major are cut directly from it. `main` currently tracks the Milvus 3.0 line (no separate `3.0` branch exists). Each prior major line keeps a maintenance branch (`2.6` for Milvus 2.6, plus `2.5`). When the SDK advances to a newer Milvus major (3.1/4.0), `main` will follow it and a `3.0` branch will be created or frozen to serve Milvus 3.0 users (some other SDKs already carry a `3.0` branch that today tracks their dev line). Always verify the branch-to-Milvus-version mapping from Git rather than assuming a branch name implies a server line.
+- **Branch overlay**: the other references describe the `main` baseline. If `git branch --show-current` returns `2.6`, you MUST read [references/branch-2.6.md](references/branch-2.6.md) before applying any knowledge from the baseline references. On `2.6`, these baseline items do **not** exist:
+  `src/v2/bloom_filter.rs` / `roaring_bitmap.rs` ·
+  `src/v2/client/global_cluster.rs` / `rls.rs` / `session.rs` / `snapshot.rs` / `telemetry.rs` ·
+  `src/v2/request/rls.rs` / `request/snapshot.rs` · `src/v2/response/rls.rs` / `response/snapshot.rs` ·
+  `src/v2/types/aggregation.rs` / `function_chain.rs` / `global_cluster.rs` / `rls.rs` / `snapshot.rs` ·
+  `ClientV2::telemetry()` / `ClientV2::session()` ·
+  prelude: `ClientTelemetry` / `MilvusClientV2Session` / `new_client_request_id` / `with_client_request_id` ·
+  examples: `v2/snapshot.rs` / `v2/rls.rs` / `v2/function_chain.rs` / `v2/external_table.rs` / `v2/text_field.rs`.
 - **Stale-working-tree guard**: the checked-out branch (even after `git fetch`) may be old while fetched upstream refs are current. For analysis and tracing, prefer reading source pinned to the relevant upstream branch — `git show refs/remotes/[remote]/[branch]:[path]` and `git ls-tree -r --name-only refs/remotes/[remote]/[branch] [dir]` — where `[remote]` is the remote that points at the native repo (milvus-io or zilliztech), whether it is named `source` or `origin`; confirm it with `git remote -v`, and check the branch set with `git branch --show-current`. Fetch the native remote first when freshness matters (`git fetch [remote]`), because remote-tracking refs can themselves be stale. Before editing, make sure the working tree is on the intended branch and in sync; never edit blindly on an old branch.
 - When a proto bump adds new fields or enum variants to messages used by existing V1/V2 code, keep both surfaces compiling: extend exhaustive proto matches and add `..Default::default()` (or explicit defaults) to proto struct literals. Limit such V1 edits to build fixes that preserve behavior.
 - Treat `src/v1` and crate-root modules such as `milvus::client`, `schema`, `query`, `mutate`, and `index` as deprecated compatibility surfaces.
