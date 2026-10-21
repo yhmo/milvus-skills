@@ -13,7 +13,14 @@ Use this skill only for `milvus-io/milvus-sdk-csharp`.
 - Confirm the checkout with `git rev-parse --show-toplevel`, `git remote -v`, `git branch --show-current`, and `git status --short` before relying on it.
 - Upstream is normally `source` (`milvus-io/milvus-sdk-csharp`); `origin` is usually the user's fork.
 - The active development line is `main`, which carries the V2 SDK (`Milvus.Client.V2`, DTO request/response API aligned with the Java/C++/Rust V2 SDKs). Legacy V1 (`Milvus.Client`) is retained in maintenance mode. Confirm the current branch set from Git before assuming API parity.
-- **Version branch model**: absent a dedicated major-version branch, `main` is both the development branch and the release branch for the newest supported Milvus line — `x.y.z` releases are cut directly from it (per the maintainers' plan, `main` becomes the Milvus 3.0 line's dev/release branch, with 3.0.x releases cut from it). When the SDK advances to a newer major (e.g. 3.1), a `3.0` branch is forked from `main` and `main` follows the new major. Currently `main` targets the Milvus 2.6 API surface and `2.6` holds the first stable V2 release (`v2.6.0`, 2026-10-16); `2.2` and `release/2.3` are legacy V1 lines, and `develop` remains from earlier work. Always verify the actual branch-to-Milvus-version mapping from Git rather than assuming a branch name implies a server line.
+- **Version branch model**: `main` is the 3.0 feature-development line — RLS, snapshot, file-resource, and external-collection APIs are implemented there but not yet released. `2.6` is the current released line; confirm the latest release with `git ls-remote --tags source`. `2.2` and `release/2.3` are legacy V1 lines, and `develop` remains from earlier work. Always verify the actual branch-to-Milvus-version mapping from Git rather than assuming a branch name implies a server line.
+- **Branch overlay**: the other references describe the `main` baseline. If `git branch --show-current` returns `2.6`, you MUST read [references/branch-2.6.md](references/branch-2.6.md) before applying any knowledge from the baseline references. On `2.6`, these baseline items do **not** exist:
+  `MilvusClientV2.Rls.cs` / `MilvusClientV2.Snapshot.cs` ·
+  `Request/Rls/` · `Request/Snapshot/` ·
+  `Request/Utility/` file-resource and external-collection requests ·
+  `Response/Rls/` · `Response/Snapshot/` · `Response/Utility/` file-resource and external-collection responses ·
+  `Types/RowPolicyAction.cs` / `RowPolicyType.cs` / `RestoreSnapshotState.cs` / `RefreshExternalCollectionState.cs` ·
+  `MilvusClientV2` RLS / snapshot / file-resource / external-collection methods.
 - **Stale-working-tree guard**: the checked-out branch (even after `git fetch`) may be old while fetched upstream refs are current. For analysis and tracing, prefer reading source pinned to the relevant upstream branch — `git show refs/remotes/[remote]/[branch]:[path]` and `git ls-tree -r --name-only refs/remotes/[remote]/[branch] [dir]` — where `[remote]` is the remote that points at the native repo (milvus-io or zilliztech), whether it is named `source` or `origin`; confirm it with `git remote -v`, and check the branch set with `git branch --show-current`. Fetch the native remote first when freshness matters (`git fetch [remote]`), because remote-tracking refs can themselves be stale. Before editing, make sure the working tree is on the intended branch and in sync; never edit blindly on an old branch.
 - Do not switch, reset, or overwrite a dirty worktree to inspect another branch. Use `git show`, `git ls-tree`, or a clean secondary worktree.
 
@@ -24,6 +31,7 @@ Read each selected reference completely before acting:
 - Architecture and runtime dataflow: [references/technical-details.md](references/technical-details.md)
 - Project and file routing: [references/source-layout.md](references/source-layout.md)
 - Build, proto generation, and tests: [references/build-and-test.md](references/build-and-test.md)
+- 2.6 branch overlay: [references/branch-2.6.md](references/branch-2.6.md)
 - Examples: [references/examples.md](references/examples.md)
 - Releases and publishing: [references/release.md](references/release.md)
 
@@ -48,7 +56,7 @@ For architecture or implementation work, normally read both `technical-details.m
 
 ## V2 API conventions
 
-- `MilvusClientV2` shipped its first stable release as **v2.6.0** (2026-10-16, from the `2.6` branch); `main` continues the V2 development line against the Milvus 2.6 API.
+- `MilvusClientV2` is released from the `2.6` branch; `main` continues the V2 development line toward the 3.0 API. Confirm the latest release with `git ls-remote --tags source`.
 - `MilvusClientV2` is `sealed` and constructed with `new MilvusClientV2(ConnectConfig)`. Call `ConnectAsync` to surface connection/auth failures up front; otherwise the first API call connects lazily.
 - Requests and responses are plain C# DTOs (`*Req`/`*Resp`) under `Request/` and `Response/` per domain (for example `Milvus.Client.V2.Requests.Collection` and `Milvus.Client.V2.Responses.Dml`). They are configured via object-initializer properties, not builders.
 - Requests convert to protobuf in `internal ToGrpc*()`; responses convert from protobuf in `internal FromGrpc()`. Never expose generated `Milvus.Client.Grpc` types publicly.
@@ -72,7 +80,7 @@ For architecture or implementation work, normally read both `technical-details.m
 
 ## Compatibility rules
 
-- **V2 (`MilvusClientV2`) is strongly recommended for new work.** V2 is the active, released API (first stable release v2.6.0). V1 (`MilvusClient`/`MilvusCollection`) is in maintenance mode: it is retained for compatibility only, should receive only requested maintenance or critical fixes, and is **not recommended** for new projects or new code.
+- **V2 (`MilvusClientV2`) is strongly recommended for new work.** V2 is the active, released API. V1 (`MilvusClient`/`MilvusCollection`) is in maintenance mode: it is retained for compatibility only, should receive only requested maintenance or critical fixes, and is **not recommended** for new projects or new code.
 - Preserve multi-targeting (`net8.0;netstandard2.0;net462`). Guard net8.0-only APIs (for example `Half` in FP16/BF16 paths) with `#if NET8_0_OR_GREATER`.
 - New source files should follow the repository's style and analyzers; `TreatWarningsAsErrors` and `AnalysisLevel=latest` are enabled at the directory level.
 - Do not update `CHANGELOG.md` for ordinary feature or bug-fix work unless the user requests release preparation.
