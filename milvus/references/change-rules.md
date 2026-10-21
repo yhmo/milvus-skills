@@ -20,7 +20,7 @@ Apply these checks:
 
 ## Observability
 
-Before changing logs, metrics, or traces, read `docs/agent_guides/observability/README.md` and every relevant linked guide.
+Before changing logs, metrics, or traces, read the observability guide on the current branch — `docs/agent_guides/observability/README.md` on `master`, or the equivalent guidance under `docs/dev/` on the `3.0`/`2.6` maintenance branches — and every relevant linked guide.
 
 - Use the checkout's `mlog` package, never direct zap, the standard logger, `fmt.Println`, or legacy logging packages.
 - Pass a real context by repository priority; use predefined fields before generic typed fields.

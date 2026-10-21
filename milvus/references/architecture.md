@@ -12,11 +12,11 @@ Use this map to choose where to inspect; verify every path against the current c
 | Metadata and scheduling | `internal/rootcoord/`, `internal/datacoord/`, `internal/querycoordv2/` | Metadata, DDL callbacks, indexing/import/compaction, load and query scheduling. |
 | Coordinator deployment | `internal/distributed/mixcoord/` | Current combined coordinator server. It composes the separate RootCoord, DataCoord, and QueryCoord packages. |
 | Execution nodes | `internal/querynodev2/`, `internal/datanode/`, `internal/streamingnode/` and matching `internal/distributed/*` packages | Query execution, ingestion/index work, and WAL execution. |
-| Storage and data lifecycle | `internal/storage/`, `internal/storagev2/`, `internal/flushcommon/`, `internal/compaction/`, `internal/snapshotio/` | Segment data model/object storage, packed v2 format, shared flush/sync/write-buffer pipelines, compaction helpers, snapshot export/restore I/O. |
+| Storage and data lifecycle | `internal/storage/`, `internal/storagev2/`, `internal/flushcommon/`, `internal/compaction/`, `internal/snapshotio/` (master/3.0) | Segment data model/object storage, packed v2 format, shared flush/sync/write-buffer pipelines, compaction helpers, snapshot export/restore I/O. |
 | Streaming/WAL | `internal/distributed/streaming/`, `internal/streamingcoord/`, `internal/streamingnode/`, `pkg/streaming/`, `internal/cdc/` | Append/read/broadcast, channel assignment, transactions, recovery, backends, replication. |
 | Native execution | `internal/core/` | C++ segcore, storage/index integration, cgo boundary, and Rust/Tantivy bindings. |
-| Shared module | `pkg/` | Separate `github.com/milvus-io/milvus/pkg/v3` module containing protobuf output, merr, mlog, streaming utilities, metrics, config, and common helpers. |
-| Go client module | `client/` | Separate `github.com/milvus-io/milvus/client/v3` module embedded in this monorepo. |
+| Shared module | `pkg/` | Separate Go module containing protobuf output, merr, mlog, streaming utilities, metrics, config, and common helpers. Module major version is branch-dependent (`pkg/v3` on master/3.0, `pkg/v2` on 2.6) — confirm from `pkg/go.mod`. |
+| Go client module | `client/` | Separate Go module embedded in this monorepo. Module major version is branch-dependent (`client/v3` on master/3.0, `client/v2` on 2.6) — confirm from `client/go.mod`. See [branch-differences.md](branch-differences.md). |
 | Configuration | `configs/milvus.yaml`, current paramtable packages | Defaults and typed configuration access. |
 | Tests | colocated `*_test.go`, `tests/integration/`, `tests/go_client/` | Unit, integration, and client-facing coverage. |
 

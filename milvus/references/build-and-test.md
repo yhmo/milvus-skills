@@ -33,7 +33,7 @@ cd pkg && go test -tags dynamic,test -gcflags="all=-N -l" -count=1 ./path/to/pac
 cd client && go test -count=1 ./path/to/package/...
 ```
 
-The monorepo carries more than the root module. Besides `pkg/` and `client/` (`github.com/milvus-io/milvus/client/v3`), there are standalone modules at `tests/go_client/` (client-facing e2e, run from `tests/go_client` with `go test ./testcases/...` against a running Milvus) and `examples/telemetry_demo/`, `examples/telemetry_e2e_test/`. Confirm module ownership from the nearest `go.mod` and run tests from that directory; do not apply root-module package patterns while standing in another module.
+The monorepo carries more than the root module. Besides `pkg/` and `client/` (module major version is branch-dependent — `client/v3` on master/3.0, `client/v2` on 2.6; confirm from `go.mod`), there are standalone modules at `tests/go_client/` (client-facing e2e, run from `tests/go_client` with `go test ./testcases/...` against a running Milvus) and `examples/telemetry_demo/`, `examples/telemetry_e2e_test/`. Confirm module ownership from the nearest `go.mod` and run tests from that directory; do not apply root-module package patterns while standing in another module.
 
 ## Formatting and static checks
 

@@ -15,6 +15,10 @@ Work from repository evidence. Treat this skill as a workflow and navigation lay
   2. a directory named `milvus` among the parent directories of the current working directory;
   3. `/home/runner/work/milvus/milvus` (GitHub Actions runner `$GITHUB_WORKSPACE`).
 - Confirm the checkout with `git rev-parse --show-toplevel` and `git remote -v` before relying on it. Do not assume the preferred path exists or is the correct repository without verification.
+- **Version branch model**: `master` is the 3.1 feature-development line (unreleased); `3.0` and `2.6` are the current released maintenance lines. The branches differ in Go module versions (`pkg/v3`+`client/v3` on `master`/`3.0` vs `pkg/v2`+`client/v2` on `2.6`), package layout, documentation, and Makefile targets. See [references/branch-differences.md](references/branch-differences.md) for the full comparison.
+- **Branch overlay**: the other references describe the `master` baseline. If `git branch --show-current` returns `3.0` or `2.6`, you MUST read [references/branch-differences.md](references/branch-differences.md) before applying any knowledge from the baseline references. On maintenance branches, these baseline items do **not** exist:
+  `master` only: `internal/dataview/` · `internal/featureusage/` · `internal/metacache/` · `internal/views/` · pyudf function chain and its Makefile targets · `make generate-segcore-codes` · `docs/agent_guides/` (observability/storage/streaming-system) · `AGENTS.md` / `CLAUDE.md` · `examples/`.
+  `3.0` additionally has `internal/agg/` and `internal/snapshotio/` which `2.6` lacks; `2.6` uses `/v2` Go module paths throughout.
 - **Stale-working-tree guard**: the checked-out branch (even after `git fetch`) may be old while fetched upstream refs are current. For analysis and tracing, prefer reading source pinned to the relevant upstream branch — `git show refs/remotes/[remote]/[branch]:[path]` and `git ls-tree -r --name-only refs/remotes/[remote]/[branch] [dir]` — where `[remote]` is the remote that points at the native repo (milvus-io or zilliztech), whether it is named `source` or `origin`; confirm it with `git remote -v`, and check the branch set with `git branch --show-current`. Fetch the native remote first when freshness matters (`git fetch [remote]`), because remote-tracking refs can themselves be stale. Before editing, make sure the working tree is on the intended branch and in sync; never edit blindly on an old branch.
 
 ## Start every task
@@ -27,6 +31,7 @@ Work from repository evidence. Treat this skill as a workflow and navigation lay
    - Architecture and trace routes: [references/architecture.md](references/architecture.md)
    - Change constraints and behavioral verification: [references/change-rules.md](references/change-rules.md)
    - Build, test, lint, and generation commands: [references/build-and-test.md](references/build-and-test.md)
+   - Branch differences (2.6 vs 3.0 vs master): [references/branch-differences.md](references/branch-differences.md)
 
 Run `scripts/repo-context.sh` when a quick current-checkout snapshot would help. Execute it from any directory inside the Milvus checkout.
 
