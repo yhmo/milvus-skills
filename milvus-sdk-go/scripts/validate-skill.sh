@@ -54,6 +54,7 @@ done
 required_references=(
   technical-details.md
   build-and-test.md
+  branch-2.6.md
   examples.md
   release.md
 )

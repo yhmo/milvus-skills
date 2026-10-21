@@ -23,6 +23,8 @@ language SDK or for server-side `internal/` packages.
 - Read [references/technical-details.md](references/technical-details.md) for architecture, source layout, the option-pattern
   API, connection/retry behavior, caches, DML/DQL, iterators, telemetry, and protobuf conversion.
 - Read [references/build-and-test.md](references/build-and-test.md) before building, testing, linting, or debugging CI.
+- Read [references/branch-2.6.md](references/branch-2.6.md) when working on the `2.6` maintenance branch, in addition
+  to the baseline references.
 - Read [references/examples.md](references/examples.md) before changing, building, or running examples.
 - Read [references/release.md](references/release.md) for version preparation, `client/vX.Y.Z` tags, and proto-version bumps.
 
@@ -36,6 +38,11 @@ language SDK or for server-side `internal/` packages.
 - `master` is the active development line (Milvus 3.0). Older released SDK versions are tagged `client/v2.5.x`, `client/v2.6.x`;
   `client/v2.6.x` corresponds to the 2.6 server line. Confirm branch/tag boundaries from Git rather than assuming.
 - **Version branch model**: because the Go SDK lives inside the `milvus-io/milvus` repository, its branches follow the server repo's model. `master` is the dev line and tracks the newest supported Milvus major release (currently 3.0); the milvus repo keeps a `2.6` branch (plus older `2.x` branches) for the previous server line, and already carries a `3.0` branch. Go SDK releases are tagged `client/vX.Y.Z`, so the SDK version that ships on a given branch is what matters (`client/v2.6.x` → Milvus 2.6, `client/v3.x` → Milvus 3.0). When the server advances to a newer major (3.1/4.0), `master` will follow it and a `3.0` branch will be maintained for Milvus 3.0. Always verify branch/tag-to-Milvus-version mapping from Git rather than assuming.
+- **Branch overlay**: the other references describe the `master` baseline (module `client/v3`, proto `go-api/v3`). If `git branch --show-current` returns `2.6`, you MUST read [references/branch-2.6.md](references/branch-2.6.md) before applying any knowledge from the baseline references. On `2.6`, the module path is `client/v2` (not `v3`) and the proto module is `go-api/v2` (not `v3`) — every `/v3` import must be replaced with `/v2`. Additionally, these baseline items do **not** exist on `2.6`:
+  `client/internal/` · `client/membership/` ·
+  `milvusclient/snapshot.go` / `snapshot_options.go` / `file_resource.go` / `file_resource_options.go` / `external_table.go` / `external_table_options.go` / `search_aggregation.go` / `search_aggregation_result.go` / `bloom_filter.go` / `roaring_filter.go` / `telemetry.go` / `errors.go` ·
+  `entity/external_table.go` / `entity/file_resource.go` ·
+  `Client.GetTelemetry()` / `getCurrentDB()` / `recordOperation()`.
 - **Stale-working-tree guard**: the checked-out branch (even after `git fetch`) may be old while fetched upstream refs are current. For analysis and tracing, prefer reading source pinned to the relevant upstream branch — `git show refs/remotes/[remote]/[branch]:[path]` and `git ls-tree -r --name-only refs/remotes/[remote]/[branch] [dir]` — where `[remote]` is the remote that points at the native repo (milvus-io or zilliztech), whether it is named `source` or `origin`; confirm it with `git remote -v`, and check the branch set with `git branch --show-current`. Fetch the native remote first when freshness matters (`git fetch [remote]`), because remote-tracking refs can themselves be stale. Before editing, make sure the working tree is on the intended branch and in sync; never edit blindly on an old branch.
 - `tests/go_client` in the milvus repo is a separate e2e module (`github.com/milvus-io/milvus/tests/go_client`) that uses a
   `replace` directive pointing the `client/v3` module at `../../client`. Changes there exercise the SDK against a real server.
