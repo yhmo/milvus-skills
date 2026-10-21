@@ -60,6 +60,7 @@ required_references=(
   technical-details.md
   source-layout.md
   build-and-test.md
+  branch-differences.md
   api-surface.md
 )
 

@@ -14,6 +14,12 @@ The Milvus high-level RESTful API is served by the Proxy component as a gin HTTP
 1. Locate the repository checkout in this order: `$HOME/work/git-go/milvus` when it exists on this machine; a directory named `milvus` among the parent directories of the current working directory; `/home/runner/work/milvus/milvus` (GitHub Actions runner `$GITHUB_WORKSPACE`).
 2. Confirm it with `git rev-parse --show-toplevel` and `git remote -v`, and confirm the httpserver package at `$ROOT/internal/distributed/proxy/httpserver`.
 3. Check `git branch --show-current`, `git status --short`, and the relevant upstream branch before assuming API behavior.
+- **Version branch model**: `master` is the 3.1 development line; `3.0` is nearly identical to `master` (one test file); `2.6` is the current released maintenance line and diverges significantly (no snapshot/file-resource/external-collection/struct-field handlers or endpoints; `handler_v2.go` and `request_v2.go` differ by thousands of lines). See [references/branch-differences.md](references/branch-differences.md).
+- **Branch overlay**: the other references describe the `master` baseline. If `git branch --show-current` returns `2.6`, you MUST read [references/branch-differences.md](references/branch-differences.md) before applying any knowledge from the baseline references. On `2.6`, these baseline items do **not** exist:
+  `file_resource_handler_v2.go` · `snapshot_handler_v2.go` ·
+  snapshot / external-collection / file-resource / struct-field endpoints ·
+  `AlterCollectionSchema` (2.6 uses `AddCollectionField` instead) ·
+  `AbortImport` / `CommitImport` v2 routes.
 4. Preserve unrelated user changes. Use focused edits; never hand-edit generated files.
 5. Search with `rg`, or run `scripts/api-trace.sh`; do not infer a route or handler from filenames alone.
 6. **Stale-working-tree guard**: the checked-out branch (even after `git fetch`) may be old while fetched upstream refs are current. For analysis and tracing, prefer reading source pinned to the relevant upstream branch — `git show refs/remotes/[remote]/[branch]:[path]` and `git ls-tree -r --name-only refs/remotes/[remote]/[branch] [dir]` — where `[remote]` is the remote that points at the native repo (milvus-io or zilliztech), whether it is named `source` or `origin`; confirm it with `git remote -v`, and check the branch set with `git branch --show-current`. Fetch the native remote first when freshness matters (`git fetch [remote]`), because remote-tracking refs can themselves be stale. Before editing, make sure the working tree is on the intended branch and in sync; never edit blindly on an old branch.
@@ -25,6 +31,7 @@ Read each selected reference completely before acting:
 - Architecture and dataflow: [references/technical-details.md](references/technical-details.md)
 - Package and file routing: [references/source-layout.md](references/source-layout.md)
 - Build, test, and lint: [references/build-and-test.md](references/build-and-test.md)
+- Branch differences (2.6 vs 3.0/master): [references/branch-differences.md](references/branch-differences.md)
 - Endpoint catalog and wire contract: [references/api-surface.md](references/api-surface.md)
 
 For architecture or implementation work, normally read both `technical-details.md` and `api-surface.md`.
