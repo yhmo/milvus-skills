@@ -22,6 +22,8 @@ language SDK except when comparing behavior.
   changes, connection/retry behavior, caches, DML/DQL, sessions, iterators, and protobuf conversion.
 - Read [references/build-and-test.md](references/build-and-test.md) before configuring, building, testing, linting, or
   debugging CI.
+- Read [references/branch-2.6.md](references/branch-2.6.md) when working on the `2.6` maintenance branch, in addition
+  to the baseline references.
 - Read [references/examples.md](references/examples.md) before changing, building, or running examples.
 - Read [references/release.md](references/release.md) for version preparation, package metadata, tags, workflows, and
   release-note investigation.
@@ -38,6 +40,17 @@ language SDK except when comparing behavior.
   major (3.1/4.0), `master` will follow it and a `3.0` branch will be created or frozen to serve Milvus 3.0 users (some
   other SDKs already carry a `3.0` branch that today tracks their dev line). Always verify the
   branch-to-Milvus-version mapping from Git rather than assuming a branch name implies a server line.
+- **Branch overlay**: the other references describe the `master` baseline. If `git branch --show-current` returns `2.6`,
+  you MUST read [references/branch-2.6.md](references/branch-2.6.md) before applying any knowledge from the baseline
+  references. On `2.6`, these baseline items do **not** exist:
+  `AGENTS.md` · `Doxyfile` · `test/e2e/` · `ClientRequestContext.h` · `ClientTelemetry.h` · `MilvusClientV2Session.h` ·
+  `request/import/` · `request/rls/` · `request/snapshot/` ·
+  `request/collection/AddCollectionStructFieldRequest` / `AddFunctionFieldRequest` / `DropCollectionFieldRequest` / `DropFunctionFieldRequest` ·
+  `request/utility/FileResourceRequest` / `ListCompactionTasksRequest` / `RefreshExternalCollectionRequest` ·
+  `response/rls/` · `response/snapshot/` ·
+  `types/FunctionChain.h` / `SearchAggregation.h` / `AggregationBucket.h` / `BloomFilter.h` / `RoaringBitmap.h` / `RowPolicy.h` / `TelemetryConfig.h` ·
+  `types/FileResourceInfo.h` / `RestoreSnapshotJobInfo.h` / `RefreshExternalCollectionJobInfo.h` / `OrderByField.h` / `IndexParam.h` ·
+  examples: `snapshot.cpp` / `rls.cpp` / `function_chain.cpp` / `search_aggregation.cpp` / etc.
 - **Stale-working-tree guard**: the checked-out branch (even after `git fetch`) may be old while fetched upstream refs
   are current. For analysis and tracing, prefer reading source pinned to the relevant upstream branch —
   `git show refs/remotes/[remote]/[branch]:[path]` and `git ls-tree -r --name-only refs/remotes/[remote]/[branch] [dir]` —
