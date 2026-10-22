@@ -125,7 +125,7 @@ Treat every review as exhaustive unless the user explicitly limits the scope. Re
 - Persist the ledger and candidate/open-question lists outside transient model context so a long review can resume without losing coverage state.
 - Report progress as `reviewed/total changed files` at module boundaries. Do not claim completion while any path or hunk remains unaccounted for.
 - Before Step 9, verify that the reviewed path set exactly equals the current PR changed-file set and that aggregate additions/deletions match the authoritative diff. Resolve renames and refresh the PR head before closing the gate.
-- Time is not a stopping condition. Continue across long runs or context compactions until Steps 1-11 and the 100% coverage gate are complete.
+- Time is not a stopping condition. Continue across long runs or context compaction until Steps 1-12 and the 100% coverage gate are complete.
 
 ### Provider rate-limit concurrency budget
 
@@ -159,19 +159,21 @@ Example: `x-ratelimit-api_key-remaining-requests: 29` → `N = min(10, floor(29/
 - Format the elapsed time as `Time cost: Xm Ys` in the final review summary. Use `0m Ys` for reviews shorter than one minute. On the immediately following line, print `PR URL: <PR_HTML_URL>` using the canonical URL recorded from PR metadata.
 - If a review is resumed after an interruption, retain the original start time when it is available so the reported time reflects the complete review workflow. If it is unavailable, start timing when the review resumes and label the timing line `Time cost after resume: Xm Ys`; still print the `PR URL: <PR_HTML_URL>` line immediately after it.
 
-**REQUIRED STEPS (do not skip):**
+**Run gates (A-G) — do not skip.** These are wrapper gates around the 12-step Review Workflow below. Gates are lettered, never numbered, so every "Step N" reference in this document unambiguously means the Review Workflow.
 
-1. **Check gh CLI is installed** - Run `gh --version` to verify
-2. **Fetch PR metadata with `gh api`** - Use `gh api repos/:owner/:repo/pulls/<PR_NUMBER>`; do not use `gh pr view`
-3. **Open linked context before technical review** - Inspect directly linked issues, PRs, design documents, specifications, and dependency changes from the PR title/body and GitHub relationship data; use the bounded linked-resource workflow below
-4. **Route repository context** - For supported Milvus-family repositories, load the mapped repository skill and locate the local checkout (commonly `$HOME/work/git-go/<repo-name>`) when available
-5. **Execute the review workflow** - Analyze the PR through Steps 1-11 before preparing comments
-6. **Validate anchors** - Confirm every `(path, line, side)` exists in the current PR diff
-7. **Post the review directly** - Create dedicated inline comments, verify comments attached to code change lines.
+- **Gate A — gh CLI ready**: run `gh --version` (see Prerequisites).
+- **Gate B — PR metadata fetched**: via `gh api repos/:owner/:repo/pulls/<PR_NUMBER>` (executed at Step 1).
+- **Gate C — linked context opened**: directly linked issues, PRs, design documents, specifications, and dependency changes inspected before technical review (see Linked-resource context collection; feeds Step 1).
+- **Gate D — repository routed**: for supported Milvus-family repositories, the mapped repository skill and local checkout are loaded (see Milvus Repository Routing; feeds Steps 1-2).
+- **Gate E — Review Workflow executed**: Steps 1-12 in order, each with evidence.
+- **Gate F — anchors validated**: every `(path, line, side)` confirmed in the current PR diff (part of Step 11 preflight).
+- **Gate G — review posted and verified**: threshold applied, comments posted, attachment fields verified (Step 12).
 
 ### Review Workflow
 
-Execute the review workflow strictly in order. Do not collapse multiple numbered steps into a single catch-all pass. Complete Step 1 before Step 2, Step 2 before Step 3, and so on through Step 11.
+The workflow has exactly twelve numbered steps. Steps 1-10 analyze and filter; Step 11 generates and preflights the final comments; Step 12 applies the posting threshold, posts, verifies attachment, and produces the final summary. The review is complete only after Step 12.
+
+Execute the review workflow strictly in order. Do not collapse multiple numbered steps into a single catch-all pass. Complete Step 1 before Step 2, Step 2 before Step 3, and so on through Step 12.
 
 #### Required surrounding-code reads
 
@@ -191,10 +193,10 @@ Operational requirements for explicit step-by-step execution:
 - Create one task for each major step or sub-phase you actually perform, and keep task status current.
 - Before each numbered step, write a short progress update naming that step.
 - After each numbered step, briefly record the outcome: no findings, candidate findings added, or candidate findings discarded.
-- Execute and report every numbered step from Step 1 through Step 11 even when the final result is `no inline comments to post`.
+- Execute and report every numbered step from Step 1 through Step 12 even when the final result is `no inline comments to post`.
 - Do not stop the workflow early just because the candidate list is empty or all candidates were discarded; instead, explicitly continue through the remaining steps and record why they ended with no surviving comments.
-- When there are no surviving findings, Steps 8-11 must still be visible in the run history: Step 8 should state whether any redundant-change candidates were found, Step 9 should state that zero findings survived confidence/dedup, Step 10 should state that zero final comments were generated, and Step 11 should state that zero comments met the posting threshold.
-- The final conclusion `no inline comments to post` is allowed only after the workflow has explicitly completed Step 11.
+- When there are no surviving findings, Steps 8-12 must still be visible in the run history: Step 8 should state whether any redundant-change candidates were found, Step 9 should state that zero findings survived confidence/dedup, Step 11 should state that zero final comments were generated, and Step 12 should state that zero comments met the posting threshold.
+- The final conclusion `no inline comments to post` is allowed only after the workflow has explicitly completed Step 12.
 - Maintain a shared candidate issue list throughout Steps 2-8.
 - Maintain a separate running notes / open-questions list during Steps 1-8. Use it to capture confusions, hypotheses, edge cases, and test questions that may be resolved later. Only promote an item from this notes list into the candidate issue list once it survives later inspection and is concrete enough to defend publicly.
 - Across Steps 3-9, explicitly accumulate evidence from all three review levels: local code quality, system integration impact, and long-term maintainability. In each step note, record which of those levels the step materially exercised and why the others were less relevant for that step. Before closing Step 9, confirm that all three levels were covered somewhere in the review, or explicitly state why one was genuinely not applicable to this PR.
@@ -208,10 +210,10 @@ Operational requirements for explicit step-by-step execution:
 - Small, single-file, example-only, or seemingly low-risk PRs still require each Step 3-9 lens to be applied. Size may affect ordering, but never changed-file, changed-hunk, or review-lens coverage.
 - Do not conclude that a PR is clean merely because no correctness bug survived. Performance, maintainability, docs/comments, failure modes, test coverage, and redundancy must each receive explicit consideration before Step 9. Before closing Step 9, explicitly list the disposition of each of those non-correctness categories as `survived as finding`, `checked and discarded on evidence`, or `not applicable`.
 - Do not post any GitHub comment until Steps 9-11 are complete.
-- Do not send a user-facing review conclusion, finding summary, or "I found X" result before Steps 10 and 11 are complete. A surviving candidate in Step 9 is not a finished review.
+- Do not send a user-facing review conclusion, finding summary, or "I found X" result before Steps 11 and 12 are complete. A surviving candidate in Step 9 is not a finished review.
 - Treat Step 11 as the only valid stopping point for a completed `pr-review` run. If the workflow is interrupted after analysis, resume at the next incomplete numbered step rather than reporting partial results as the final outcome.
-- Use the task list as a hard completion gate: if any Step 10 or Step 11 task is still `pending` or `in_progress`, continue the workflow instead of concluding the review.
-- Before any final user-facing completion message, run an explicit completion check: confirm Steps 1-11 are complete, confirm Step 10 generated the final comment set (or explicitly recorded zero generated comments), and confirm Step 11 posted and verified every surviving comment (or explicitly recorded zero posted comments).
+- Use the task list as a hard completion gate: if any Step 11 or Step 12 task is still `pending` or `in_progress`, continue the workflow instead of concluding the review.
+- Before any final user-facing completion message, run an explicit completion check: confirm Steps 1-12 are complete, confirm Step 11 generated the final comment set (or explicitly recorded zero generated comments), and confirm Step 12 posted and verified every surviving comment (or explicitly recorded zero posted comments).
 - For standalone runs, confirm the run-specific temporary workspace was deleted after all evidence was consumed. For orchestrated runs, confirm artifact ownership was handed back to the caller instead of deleting caller-owned paths.
 - If a step does not apply, explicitly say why it does not apply instead of silently skipping it.
 - At the end of Step 1, record risk-priority triage based on size, public API impact, module sensitivity, data/compatibility risk, and reversibility of mistakes. Triage controls review order and where extra surrounding-context depth is spent; it never permits a light pass, sampling, or reduced diff coverage.
@@ -269,69 +271,57 @@ Prefer focused guidance documents over reading all markdown files in the repo, b
 
 Carry forward requirements learned from linked issues, PRs, design documents, specifications, and dependency changes as explicit review constraints in this step. When repository guidance and linked-resource requirements differ, record the conflict and determine which contract governs the changed behavior before continuing.
 
-3. **Run a multi-depth bug scan**
-Review the changed code step by step and scan for bugs at multiple depths.
-This step is not complete until you have deliberately exercised each depth below as its own lens; do not stop after the first promising candidate collapses, and do not treat the rest of the list as already covered by a general read-through.
-- **Surface level**: Typos, wrong variable names, missing returns, copy-paste errors
-- **Logic level**: Trace through conditionals and loops with concrete example inputs
-- **Failure level**: For each operation, ask "what if this fails?" - null returns, exceptions, promise rejections
-- **Edge case level**: Empty inputs, boundary values, malformed data, single-item collections
-- **Public API misuse level**: For any newly added or modified public SDK/API surface, ask how a caller can misuse it with still-type-correct input
-- **Public API semantics level**: For every changed public method, builder, option, callback, raw-param shim, or request flag, ask whether the PR changed what an existing caller means when they pass the same source code as before
-- **Naming clarity level**: Treat unclear, misleading, or overly generic naming as a signal to inspect the underlying logic, ownership, or abstraction more deeply rather than dismissing it as cosmetic
-- **Refactor consistency level**: For reorganizations, cache rewrites, plumbing moves, and shared-state refactors, ask whether the new implementation preserves the old invariants across clients, databases, collections, threads, and request paths
-- **Partial-mutation failure level**: For every new or modified error-return path, ask what state has already been mutated before the return, whether that state is rolled back or left partially consumed, and what destructor, cleanup, retry, flush, or close paths will observe afterward
-- **Compile-surface level**: For C/C++ changes, inspect newly added includes, namespace-qualified symbols, declaration/definition pairing, and obvious target/source discovery patterns to catch likely branch-local compile failures without building
-- **Dependency verification level**: When a changed line introduces a new helper or provider, follow that dependency to its declaration or definition and verify it exists in the PR branch context
-- **Micro pass**: Look for local correctness issues, line-level readability problems, duplication, and obvious implementation mistakes
-- **Performance pass**: Look for avoidable allocations, unnecessary copies, repeated serialization work, redundant traversals, and other inefficiencies that occur in hot paths, per-row/per-item loops, or otherwise scaled execution paths
-- **Maintainability pass**: Look for newly duplicated logic, drift-prone sibling implementations, awkward ownership boundaries, or other concrete structure problems that are likely to make the next bug fix or feature change error-prone
-- **SOLID/design-structure pass**: Use SOLID as a diagnostic lens for high cohesion and low coupling, not as a reason to demand abstractions or preferred styles. Apply each applicable probe to changed classes, interfaces, modules, and cross-component state flows:
-  - **Single Responsibility**: Does the change give one unit multiple independent reasons to change, mix policy with mechanism, or split one invariant across owners so fixes can drift?
-  - **Open/Closed**: Does adding the next likely variant require editing repeated conditionals or switches across stable code instead of extending one existing boundary? Do not require an extension point for a speculative or one-off variation.
-  - **Liskov Substitution**: Can every implementation still honor the base contract's inputs, outputs, errors, lifecycle, concurrency, and state invariants, or does a subtype add stronger preconditions or weaker guarantees?
-  - **Interface Segregation**: Does the changed interface force clients or implementations to depend on unrelated methods, dummy implementations, broader permissions, or dependencies they do not use?
-  - **Dependency Inversion**: Has high-level policy become coupled to a concrete transport, storage engine, singleton/global, clock, filesystem, or constructor path in a way that blocks testing, replacement, or reuse where an established abstraction already exists?
-  - **Cohesion/coupling synthesis**: Trace ownership of shared mutable state and persisted representations across components. Ask whether one logical invariant now has multiple authorities or whether unrelated modules must change together.
-- Promote a SOLID concern only when it is tied to changed lines and has a concrete consequence: incorrect substitution, inconsistent state, duplicated change sites, hard-to-test behavior, architectural boundary erosion, or disproportionate future change cost. Record preference-only or premature-abstraction observations in notes and discard them before posting.
-- **Question pass**: Keep asking the running open questions from Step 1 and the current diff: what assumption is being made, what would happen if the input is empty/stale/malformed, and does the test suite actually demonstrate the intended behavior?
+3. **Run multi-depth scans**
+Execute each sub-pass in order as an independent lens. A sub-pass is complete only when its own evidence line records the files/functions inspected from that lens and the findings added or explicitly ruled out. Do not collapse sub-passes into one general read-through, do not stop after the first promising candidate collapses, and do not treat later sub-passes as already covered by an earlier one.
 
-This step should explicitly cover:
-- local code quality
-- system integration impact where it reveals a concrete bug
-- concrete performance regressions or avoidable costs introduced by the changed code
-- concrete maintainability risks introduced by duplication or structure drift
-- concrete SOLID/cohesion/coupling violations whose runtime, testability, ownership, or future-change cost can be demonstrated from repository evidence
+Load applicable checklists before starting, based on the PR classification from Step 1 and the repository routing above, and enumerate them in the Step 3 evidence ledger:
+- SDK repository PR (pymilvus, milvus-sdk-*, or the `client/` module inside milvus): load [references/checklists/sdk-public-api.md](references/checklists/sdk-public-api.md)
+- Changed code contains parsing, regex, or pattern-matching: load [references/checklists/parsing.md](references/checklists/parsing.md)
+- milvus server / milvus-common / milvus-storage PR, or any PR touching auth, credentials, networking, file paths, or external input: load [references/checklists/security.md](references/checklists/security.md)
+- Changed code involves async execution, concurrency, or shared mutable state (any repository): load [references/checklists/concurrency.md](references/checklists/concurrency.md)
 
-For regex, parsers, or pattern-matching code:
-- Trace through with at least 3 concrete examples (happy path, edge case, malformed input)
-- Verify capture groups/parsed values are used correctly downstream
-- Check if all documented input formats are actually handled
+A checklist that exists and applies but was not loaded requires a one-line justification in the ledger.
 
-For public SDK methods, request builders, response types, callbacks, enums, stringly-typed setters, and any API with incremental or long-lived behavior:
-- Try at least 3 caller inputs: intended valid input, malformed-but-type-valid input, and omitted/empty input
-- Treat SDK setters and callback registration points as hostile boundaries even if internal code usually passes valid values
-- For backward-compatibility, ask whether the PR changed what existing user code means or whether it breaks old caller patterns without an explicit migration path
-- Check whether invalid strings silently fall back to defaults instead of returning an error
-- Check whether optional callbacks / `std::function` / function pointers are invoked without an emptiness check
-- Check whether a helper assumes a value came from another SDK call, even though callers can construct that value manually
-- Check whether operational policy matches API lifecycle: a timeout, deadline, retry rule, buffer limit, or batching policy that is reasonable for short requests may be wrong for incremental or long-lived work
-- When an API is open-ended, high-volume, user-paced, or callback-driven, ask whether shared client defaults can truncate output, stop progress early, or turn normal operation into a timeout/error path
-- Treat examples or docs that imply unbounded, resumable, or progressive behavior as evidence that the API may outlive ordinary request assumptions
-- For every newly added request parameter, option, or builder field, trace whether the feature is also wired through response parsing and exposed back through the public result type when the server can return corresponding data
-- When a feature is described as user-visible, verify the PR implements the full path end to end rather than only request construction or only internal plumbing
-- For values serialized onto the wire as strings, verify the format is stable and protocol-safe: locale-independent, precision-safe, and consistent with existing project helpers for the same data type
-- Treat examples, tests, and docs as part of the public contract: if they demonstrate a value or pattern the server rejects, count that as a real SDK issue, not just a test-only mistake
-- For backward-compatibility shims and low-level param APIs (`add_param`, raw key/value lists, deprecated setters, compatibility helpers), verify the PR still honors old caller escape hatches and explicit opt-outs rather than only the new typed path
-- When a boolean or option used to mean "force/disable/default" something, verify that each prior caller-visible state is still representable after the refactor and that no branch became impossible to express
-- For refactored request flag derivation, verify that explicit caller opt-outs, compatibility params, and deprecated setters are still honored consistently across all request paths
-- For caches, memoized defaults, and shared maps introduced by the PR, ask whether state is scoped correctly per client / session / database / collection rather than silently becoming process-global or cross-tenant
-- For shared mutable state introduced by the PR, ask whether one client, session, database, collection, or request can clear, overwrite, or reuse another scope's cached state, timestamps, memoized defaults, or progress counters
+**3a. Correctness pass** — exercise each lens below deliberately:
+- Surface: typos, wrong variable names, missing returns, copy-paste errors
+- Micro: local correctness issues, line-level readability, obvious implementation mistakes
+- Logic: trace through conditionals and loops with concrete example inputs
+- Failure: for each operation ask "what if this fails?" — null returns, exceptions, promise rejections
+- Edge cases: empty inputs, boundary values, malformed data, single-item collections
+- Partial-mutation failure: for every new or modified error-return path, ask what state was already mutated before the return, whether it is rolled back or left partially consumed, and what destructor, cleanup, retry, flush, or close paths will observe afterward
+- Refactor consistency: for reorganizations, cache rewrites, plumbing moves, and shared-state refactors, ask whether the new implementation preserves the old invariants across clients, databases, collections, threads, and request paths
+- Naming clarity: treat unclear, misleading, or overly generic naming as a signal to inspect the underlying logic, ownership, or abstraction more deeply rather than dismissing it as cosmetic
+- Compile surface: for C/C++ changes, inspect newly added includes, namespace-qualified symbols, declaration/definition pairing, and obvious target/source discovery patterns to catch likely branch-local compile failures without building; for any language, check whether the change could break the project's compile environment or settings
+- Dependency verification: when a changed line introduces a new helper or provider, follow that dependency to its declaration or definition and verify it exists in the PR branch context
 
-Possible compile error:
-- Check the project compile environment/settings, is any code change could lead to compile error?
+**3b. Design pass** — use SOLID as a diagnostic lens for high cohesion and low coupling, not as a reason to demand abstractions or preferred styles. Apply each applicable probe to changed classes, interfaces, modules, and cross-component state flows:
+- Single Responsibility: does the change give one unit multiple independent reasons to change, mix policy with mechanism, or split one invariant across owners so fixes can drift?
+- Open/Closed: does adding the next likely variant require editing repeated conditionals or switches across stable code instead of extending one existing boundary? Do not require an extension point for a speculative or one-off variation.
+- Liskov Substitution: can every implementation still honor the base contract's inputs, outputs, errors, lifecycle, concurrency, and state invariants, or does a subtype add stronger preconditions or weaker guarantees?
+- Interface Segregation: does the changed interface force clients or implementations to depend on unrelated methods, dummy implementations, broader permissions, or dependencies they do not use?
+- Dependency Inversion: has high-level policy become coupled to a concrete transport, storage engine, singleton/global, clock, filesystem, or constructor path in a way that blocks testing, replacement, or reuse where an established abstraction already exists?
+- Cohesion/coupling synthesis: trace ownership of shared mutable state and persisted representations across components. Ask whether one logical invariant now has multiple authorities or whether unrelated modules must change together.
 
-Add every plausible issue from this pass to the candidate issue list, even if confidence is still low. Before closing this pass, explicitly name which sub-lenses were exercised and what evidence was checked for each, record at least one concrete thing this pass tried to falsify beyond the first discovered candidate, and list which surrounding files, headers, declarations, or helper providers were inspected beyond the patch hunk.
+Promote a SOLID concern only when it is tied to changed lines and has a concrete consequence: incorrect substitution, inconsistent state, duplicated change sites, hard-to-test behavior, architectural boundary erosion, or disproportionate future change cost. Record preference-only or premature-abstraction observations in notes and discard them before posting.
+
+**3c. Performance pass** — look for avoidable allocations, unnecessary copies, repeated serialization work, redundant traversals, and other inefficiencies that occur in hot paths, per-row/per-item loops, or otherwise scaled execution paths. For any concern kept alive, name the repeated path, the concrete extra work introduced, and the scale dimension that makes it matter.
+
+**3d. Maintainability pass** — look for newly duplicated logic, drift-prone sibling implementations, awkward ownership boundaries, or other concrete structure problems that are likely to make the next bug fix or feature change error-prone.
+
+**3e. Security pass** — apply [references/checklists/security.md](references/checklists/security.md): secrets, injection, authorization gaps, unsafe deserialization, credential handling, transport safety, and protocol-safety of user-controlled values reaching logs, metrics, or the wire.
+
+**3f. Concurrency pass** — apply [references/checklists/concurrency.md](references/checklists/concurrency.md) and translate its patterns to the PR's language: leak, race, deadlock/lock order, atomicity of compound operations, cancellation/timeout, callback thread-safety, and shutdown for every async boundary or shared mutable state the diff touches.
+
+**Closing question pass** — keep asking the running open questions from Step 1 and the current diff: what assumption is being made, what would happen if the input is empty/stale/malformed, and does the test suite actually demonstrate the intended behavior?
+
+Completion gate for Step 3 — all of the following:
+- Every sub-pass 3a-3f has its own evidence line: the files, functions, or scenarios inspected from that sub-pass's lens, plus findings added or an explicit ruled-out rationale.
+- The step explicitly addressed local code quality, system integration impact where it reveals a concrete bug, concrete performance regressions or avoidable costs, concrete maintainability risks from duplication or structure drift, and concrete SOLID/cohesion/coupling violations whose runtime, testability, ownership, or future-change cost can be demonstrated from repository evidence.
+- Loaded checklists are enumerated, with justification for any applicable-but-unloaded checklist.
+- At least one concrete falsification attempt was made beyond the first discovered candidate.
+- Surrounding files, headers, declarations, or helper providers inspected beyond the patch hunk are named.
+
+Add every plausible issue from these passes to the candidate issue list, even if confidence is still low.
 
 4. **Review historical and surrounding context**
 Read git blame and history of modified code, then inspect related files that might be affected by the changes.
@@ -550,8 +540,8 @@ If a surviving finding cannot be anchored, explicitly handle it with the fallbac
 - Post `Medium` findings
 - Post `Low` findings by default unless the user explicitly asks to ignore them. For example, skip low findings if user explicitly says "ignore minor issues" or "ignore low issues".
 - Even when zero findings survive to this step, still execute Step 11 explicitly and record that no comments met the posting threshold.
-- Step 11 completion is mandatory before any final review response. Never stop after Step 9 or Step 10 just because the surviving findings are already clear.
-- If there is at least one surviving finding entering Step 10, the workflow must continue through comment generation, inline posting, and post verification before the review is considered complete.
+- Step 12 completion is mandatory before any final review response. Never stop after Step 9, Step 10, or Step 11 just because the surviving findings are already clear.
+- If there is at least one surviving finding entering Step 11, the workflow must continue through comment generation, inline posting, and post verification before the review is considered complete.
 - If a user message arrives mid-review, finish or resume the numbered workflow unless the user explicitly changes the task. Do not convert an in-progress review into a partial-results summary.
 
 At the end, summarize the result in counts: total candidate findings, discarded findings, and posted comments by severity. End the summary with these exact final two-line fields, with no content between or after them:
@@ -568,7 +558,7 @@ Use `Time cost after resume: Xm Ys` for the first line only when the original st
   - Step 10 completed
   - Step 11 completed
   - every surviving finding was either posted and attachment-verified, or explicitly discarded with a stated reason
-  - no Step 10 or Step 11 task remains `pending` or `in_progress`
+  - no Step 11 or Step 12 task remains `pending` or `in_progress`
   - review end time recorded and elapsed wall-clock seconds calculated from the saved start time
   - canonical PR URL recorded from PR metadata
   - final summary ends with the correctly formatted time-cost line followed immediately by the `PR URL: <PR_HTML_URL>` line
@@ -660,6 +650,15 @@ Use the same two-line format for fallback non-inline comments.
 ## Bundled Scripts
 
 - `scripts/cleanup_workspace.py`: safely remove only a direct system-temporary-directory child whose name starts with `pr-review.`; reject arbitrary paths and symlinks.
+
+## Bundled review checklists
+
+- [references/checklists/sdk-public-api.md](references/checklists/sdk-public-api.md): public SDK API review rules — hostile-caller probes, backward compatibility, lifecycle policy, wire serialization, cache scoping.
+- [references/checklists/parsing.md](references/checklists/parsing.md): regex/parser/pattern-matching review rules.
+- [references/checklists/security.md](references/checklists/security.md): security review rules — secrets, injection, authorization, deserialization, transport, SDK credential handling.
+- [references/checklists/concurrency.md](references/checklists/concurrency.md): concurrency review rules with per-language pattern translation.
+
+Step 3 loads applicable checklists per PR classification; the Step 3 evidence ledger must enumerate them.
 
 ## Notes
 
