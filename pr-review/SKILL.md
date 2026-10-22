@@ -293,6 +293,7 @@ Load applicable checklists before starting, based on the PR classification from 
 - milvus server / milvus-common / milvus-storage PR, or any PR touching auth, credentials, networking, file paths, or external input: load [references/checklists/security.md](references/checklists/security.md)
 - Changed code involves async execution, concurrency, or shared mutable state (any repository): load [references/checklists/concurrency.md](references/checklists/concurrency.md)
 - The diff changes proto definitions, a proto submodule pin, shared error-code definitions, storage/segment formats, or any wire contract consumed by sibling repositories: load [references/checklists/cross-repo.md](references/checklists/cross-repo.md)
+- The diff adds or modifies example, tutorial, or doc-snippet code (`examples/`, `example/`, `tutorial/`, README/docs code blocks): load [references/checklists/examples.md](references/checklists/examples.md)
 
 A checklist that exists and applies but was not loaded requires a one-line justification in the ledger.
 
@@ -678,6 +679,7 @@ Use the same two-line format for fallback non-inline comments.
 - [references/checklists/security.md](references/checklists/security.md): security review rules — secrets, injection, authorization, deserialization, transport, SDK credential handling.
 - [references/checklists/concurrency.md](references/checklists/concurrency.md): concurrency review rules with per-language pattern translation.
 - [references/checklists/cross-repo.md](references/checklists/cross-repo.md): cross-repository consistency rules — proto bumps, sibling PRs, error-code families, wire/REST contracts, storage formats.
+- [references/checklists/examples.md](references/checklists/examples.md): example-code deprecated-API rules — per-language deprecation markers, replacement recommendation, V1/V2 surface guidance.
 
 Step 3 loads applicable checklists per PR classification; the Step 3 evidence ledger must enumerate them.
 

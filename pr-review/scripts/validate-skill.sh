@@ -12,6 +12,7 @@ required=(
   "references/checklists/security.md"
   "references/checklists/concurrency.md"
   "references/checklists/cross-repo.md"
+  "references/checklists/examples.md"
 )
 
 for path in "${required[@]}"; do
@@ -39,7 +40,7 @@ if ! grep -q '^name: pr-review$' "$skill_dir/SKILL.md"; then
   exit 1
 fi
 
-for checklist in sdk-public-api parsing security concurrency cross-repo; do
+for checklist in sdk-public-api parsing security concurrency cross-repo examples; do
   if ! grep -F "references/checklists/$checklist.md" "$skill_dir/SKILL.md" >/dev/null; then
     echo "SKILL.md does not link references/checklists/$checklist.md" >&2
     exit 1
