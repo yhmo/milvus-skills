@@ -65,4 +65,9 @@ if ! grep -q 'Run gates (A-G)' "$skill_dir/SKILL.md"; then
   exit 1
 fi
 
+if ! grep -F 'Any PR that adds or modifies a public API surface' "$skill_dir/SKILL.md" >/dev/null; then
+  echo "SKILL.md public-API checklist loading rule is too narrow; it must cover public modules/headers in non-SDK repos too" >&2
+  exit 1
+fi
+
 echo "skill structure ok: $skill_dir"

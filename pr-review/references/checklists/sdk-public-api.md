@@ -1,7 +1,9 @@
 # Public SDK API review checklist
 
-Load for SDK repository PRs (pymilvus, milvus-sdk-*, or the `client/` module
-inside the milvus server repo).
+Load for any PR that adds or modifies a public API surface: SDK repositories
+(pymilvus, milvus-sdk-*, or the `client/` module inside the milvus server
+repo), and public modules/headers in other repos (milvus `pkg/`,
+milvus-common `include/`, knowhere `include/knowhere/`, milvus-storage FFI).
 
 ## Hostile-caller probes
 

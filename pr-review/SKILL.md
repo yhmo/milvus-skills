@@ -275,7 +275,7 @@ Carry forward requirements learned from linked issues, PRs, design documents, sp
 Execute each sub-pass in order as an independent lens. A sub-pass is complete only when its own evidence line records the files/functions inspected from that lens and the findings added or explicitly ruled out. Do not collapse sub-passes into one general read-through, do not stop after the first promising candidate collapses, and do not treat later sub-passes as already covered by an earlier one.
 
 Load applicable checklists before starting, based on the PR classification from Step 1 and the repository routing above, and enumerate them in the Step 3 evidence ledger:
-- SDK repository PR (pymilvus, milvus-sdk-*, or the `client/` module inside milvus): load [references/checklists/sdk-public-api.md](references/checklists/sdk-public-api.md)
+- Any PR that adds or modifies a public API surface — SDK repositories (pymilvus, milvus-sdk-*, or the `client/` module inside milvus) AND public modules/headers in other repos (milvus `pkg/`, milvus-common `include/`, knowhere `include/knowhere/`, milvus-storage FFI): load [references/checklists/sdk-public-api.md](references/checklists/sdk-public-api.md)
 - Changed code contains parsing, regex, or pattern-matching: load [references/checklists/parsing.md](references/checklists/parsing.md)
 - milvus server / milvus-common / milvus-storage PR, or any PR touching auth, credentials, networking, file paths, or external input: load [references/checklists/security.md](references/checklists/security.md)
 - Changed code involves async execution, concurrency, or shared mutable state (any repository): load [references/checklists/concurrency.md](references/checklists/concurrency.md)
