@@ -241,6 +241,9 @@ Perform this during Step 1, after fetching PR metadata and before summarizing in
 
 1. **Summarize the PR**
 Fetch PR metadata with `gh api repos/:owner/:repo/pulls/<PR_NUMBER>` and summarize the changed files, overall intent, intended user/business flow, and risk areas before deeper review.
+- Fetch the commit list with `gh api repos/:owner/:repo/pulls/<PR_NUMBER>/commits`. For Milvus-family repositories, apply the commit-hygiene rule: each PR must contain exactly one commit, and every commit must carry a `Signed-off-by:` trailer. Add a `Low` candidate when either rule is violated, unless the user explicitly scoped the review away from commit hygiene.
+- Fetch CI context with `gh api repos/:owner/:repo/commits/<HEAD_SHA>/check-runs` plus `.../status`. Record failing or pending checks as review context; when a red check maps to changed files, name it in the risk-priority triage. Do not treat green CI as evidence of correctness.
+- Run the generated-file heuristic on the changed-file list before deep review: intersect it with the repository's committed generated-output locations — pymilvus `pymilvus/grpc_gen/*_pb2*.py` and `*.pyi`; milvus `internal/mocks/` and `mock_*.go`; milvus `client/milvusclient/mock_milvus_server_test.go`; milvus-sdk-node `milvus/proto-json/*.ts`; plus any path the loaded repository skill or `AGENTS.md` marks as generated. Add a candidate finding for hand-edits to generated files unless the PR also changes the generator inputs or explicitly regenerates output; verify through the repository's regeneration workflow instead.
 - Before writing the summary, complete the linked-resource context collection above and list the resources inspected. If the PR has no directly relevant linked resources, state that explicitly.
 - Incorporate linked-resource evidence into the motivation, intended flow, acceptance criteria, compatibility requirements, known limitations, and review-risk summary. Do not summarize intent from the PR body alone when linked context is available.
 - Explicitly compare the PR title/body and changed code against the linked closing issue or design specification. Record whether the implementation appears to cover the requested scope and whether any acceptance criterion is missing, ambiguous, or contradicted.
@@ -279,6 +282,7 @@ Load applicable checklists before starting, based on the PR classification from 
 - Changed code contains parsing, regex, or pattern-matching: load [references/checklists/parsing.md](references/checklists/parsing.md)
 - milvus server / milvus-common / milvus-storage PR, or any PR touching auth, credentials, networking, file paths, or external input: load [references/checklists/security.md](references/checklists/security.md)
 - Changed code involves async execution, concurrency, or shared mutable state (any repository): load [references/checklists/concurrency.md](references/checklists/concurrency.md)
+- The diff changes proto definitions, a proto submodule pin, shared error-code definitions, storage/segment formats, or any wire contract consumed by sibling repositories: load [references/checklists/cross-repo.md](references/checklists/cross-repo.md)
 
 A checklist that exists and applies but was not loaded requires a one-line justification in the ledger.
 
@@ -312,10 +316,13 @@ Promote a SOLID concern only when it is tied to changed lines and has a concrete
 
 **3f. Concurrency pass** — apply [references/checklists/concurrency.md](references/checklists/concurrency.md) and translate its patterns to the PR's language: leak, race, deadlock/lock order, atomicity of compound operations, cancellation/timeout, callback thread-safety, and shutdown for every async boundary or shared mutable state the diff touches.
 
+**3g. Cross-repository consistency pass (conditional)** — activate only when the diff changes proto definitions, a proto submodule pin, shared error-code definitions, storage/segment formats, or any wire contract consumed by sibling repositories. Apply [references/checklists/cross-repo.md](references/checklists/cross-repo.md): name the changed contract, map its consumers, determine the dependency direction, check whether synchronized changes or sibling PRs exist or are required, and record the conclusion in the evidence ledger.
+
 **Closing question pass** — keep asking the running open questions from Step 1 and the current diff: what assumption is being made, what would happen if the input is empty/stale/malformed, and does the test suite actually demonstrate the intended behavior?
 
 Completion gate for Step 3 — all of the following:
 - Every sub-pass 3a-3f has its own evidence line: the files, functions, or scenarios inspected from that sub-pass's lens, plus findings added or an explicit ruled-out rationale.
+- Sub-pass 3g was either activated with its own evidence line or explicitly ruled out with the condition that did not apply.
 - The step explicitly addressed local code quality, system integration impact where it reveals a concrete bug, concrete performance regressions or avoidable costs, concrete maintainability risks from duplication or structure drift, and concrete SOLID/cohesion/coupling violations whose runtime, testability, ownership, or future-change cost can be demonstrated from repository evidence.
 - Loaded checklists are enumerated, with justification for any applicable-but-unloaded checklist.
 - At least one concrete falsification attempt was made beyond the first discovered candidate.
@@ -657,6 +664,7 @@ Use the same two-line format for fallback non-inline comments.
 - [references/checklists/parsing.md](references/checklists/parsing.md): regex/parser/pattern-matching review rules.
 - [references/checklists/security.md](references/checklists/security.md): security review rules — secrets, injection, authorization, deserialization, transport, SDK credential handling.
 - [references/checklists/concurrency.md](references/checklists/concurrency.md): concurrency review rules with per-language pattern translation.
+- [references/checklists/cross-repo.md](references/checklists/cross-repo.md): cross-repository consistency rules — proto bumps, sibling PRs, error-code families, wire/REST contracts, storage formats.
 
 Step 3 loads applicable checklists per PR classification; the Step 3 evidence ledger must enumerate them.
 

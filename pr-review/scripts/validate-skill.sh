@@ -11,6 +11,7 @@ required=(
   "references/checklists/parsing.md"
   "references/checklists/security.md"
   "references/checklists/concurrency.md"
+  "references/checklists/cross-repo.md"
 )
 
 for path in "${required[@]}"; do
@@ -38,7 +39,7 @@ if ! grep -q '^name: pr-review$' "$skill_dir/SKILL.md"; then
   exit 1
 fi
 
-for checklist in sdk-public-api parsing security concurrency; do
+for checklist in sdk-public-api parsing security concurrency cross-repo; do
   if ! grep -F "references/checklists/$checklist.md" "$skill_dir/SKILL.md" >/dev/null; then
     echo "SKILL.md does not link references/checklists/$checklist.md" >&2
     exit 1
@@ -47,6 +48,11 @@ done
 
 if ! grep -q 'Completion gate for Step 3' "$skill_dir/SKILL.md"; then
   echo "SKILL.md is missing the Step 3 completion gate" >&2
+  exit 1
+fi
+
+if ! grep -q '3g\. Cross-repository consistency pass' "$skill_dir/SKILL.md"; then
+  echo "SKILL.md is missing the conditional cross-repository consistency sub-pass" >&2
   exit 1
 fi
 
