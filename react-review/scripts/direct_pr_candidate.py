@@ -1,10 +1,14 @@
 #!/usr/bin/env python3
+"""Resolve one react-review PR URL into a safe candidate TSV."""
+
+from __future__ import annotations
+
 import argparse
 import json
-from pathlib import Path
 import re
 import subprocess
-import sys
+import time
+from pathlib import Path
 
 
 SUPPORTED_ORGS = ("milvus-io", "zilliztech")
@@ -31,11 +35,42 @@ def run_gh(*args: str, check: bool = True) -> subprocess.CompletedProcess[str]:
     )
 
 
-def is_internal(author: str) -> bool:
+def membership_is_definitive(result: subprocess.CompletedProcess[str]) -> bool | None:
+    status_line = result.stdout.splitlines()[0] if result.stdout else ""
+    match = re.match(r"^HTTP/[0-9.]+\s+(\d{3})\b", status_line)
+    if not match:
+        return None
+    status = int(match.group(1))
+    if result.returncode == 0 and 200 <= status < 300:
+        return True
+    if status == 404:
+        return False
+    return None
+
+
+def is_internal(author: str, author_association: str) -> bool:
+    if author_association in {"OWNER", "MEMBER"}:
+        return True
+    if not author:
+        raise SystemExit("error: PR author login is empty")
+
     for org in SUPPORTED_ORGS:
-        result = run_gh("--silent", f"/orgs/{org}/members/{author}", check=False)
-        if result.returncode == 0:
-            return True
+        endpoint = f"/orgs/{org}/members/{author}"
+        last_error = ""
+        for attempt in range(1, 4):
+            result = run_gh("--include", endpoint, check=False)
+            answer = membership_is_definitive(result)
+            if answer is True:
+                return True
+            if answer is False:
+                break
+            last_error = result.stderr.strip() or "missing or malformed HTTP status"
+            if attempt < 3:
+                time.sleep(attempt)
+        if last_error:
+            raise SystemExit(
+                f"error: membership check for {author} in {org} was indeterminate: {last_error}"
+            )
     return False
 
 
@@ -44,18 +79,14 @@ def clean_tsv(value: str) -> str:
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(
-        description="Resolve one react-review PR URL into a candidate TSV"
-    )
+    parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--url", required=True)
     parser.add_argument("--output", type=Path, required=True)
     args = parser.parse_args()
 
     match = URL_PATTERN.fullmatch(args.url.strip())
     if not match:
-        raise SystemExit(
-            "error: expected a canonical open PR URL under milvus-io or zilliztech"
-        )
+        raise SystemExit("error: expected a canonical open PR URL under milvus-io or zilliztech")
 
     owner = match.group("owner")
     repo_name = match.group("repo")
@@ -70,9 +101,13 @@ def main() -> None:
     except subprocess.CalledProcessError as error:
         message = error.stderr.strip() or "GitHub API request failed"
         raise SystemExit(f"error: cannot resolve PR: {message}") from error
+    except json.JSONDecodeError as error:
+        raise SystemExit(f"error: GitHub returned invalid PR JSON: {error}") from error
+    if not isinstance(pr, dict):
+        raise SystemExit("error: GitHub PR response must be a JSON object")
 
     canonical_url = pr.get("html_url") or ""
-    normalized_input = args.url.rstrip("/")
+    normalized_input = args.url.strip().rstrip("/")
     if canonical_url != normalized_input:
         raise SystemExit(f"error: canonical PR URL is {canonical_url or 'unavailable'}")
     if (pr.get("state") or "").lower() != "open":
@@ -89,8 +124,9 @@ def main() -> None:
         or normalized_author in KNOWN_AUTOMATION_AUTHORS
     ):
         raise SystemExit(f"error: PR author is a bot or automation account: {author}")
-    internal = "1" if is_internal(author) else "0"
 
+    association = pr.get("author_association") or ""
+    internal = "1" if is_internal(author, association) else "0"
     values = [
         canonical_url,
         author,
@@ -107,6 +143,7 @@ def main() -> None:
         json.dumps(
             {
                 "author": author,
+                "author_association": association,
                 "internal": internal,
                 "number": int(number),
                 "pr_url": canonical_url,

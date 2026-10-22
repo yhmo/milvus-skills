@@ -91,6 +91,9 @@ api_to_file() {
       return 0
     fi
     echo "warning: GitHub API attempt ${attempt}/3 failed: ${endpoint}" >&2
+    if [[ ${attempt} -lt 3 ]]; then
+      sleep "${attempt}"
+    fi
   done
   return 1
 }
@@ -142,10 +145,14 @@ with open(output_path, "a", encoding="utf-8") as output:
         if created_epoch <= cutoff:
             reached_cutoff = True
             continue
+        author_login = (pr.get("user") or {}).get("login") or ""
+        if not author_login:
+            raise SystemExit(f"error: {pr.get('html_url', '<unknown PR>')} has no author login")
         values = [
             pr["html_url"],
-            (pr.get("user") or {}).get("login") or "",
+            author_login,
             (pr.get("user") or {}).get("type") or "",
+            pr.get("author_association") or "",
             pr["created_at"],
             (pr.get("base") or {}).get("repo", {}).get("full_name") or "",
             str(pr["number"]),
@@ -175,21 +182,69 @@ is_bot_author() {
   [[ "${author_type}" == "Bot" ]] || [[ "${normalized}" == *"[bot]" ]] || [[ -n "${known_automation_authors[${normalized}]+x}" ]]
 }
 
+check_org_membership() {
+  local org="$1"
+  local author="$2"
+  local status_file="$3"
+  local attempt gh_status status_line http_status
+  : >"${status_file}"
+  for attempt in 1 2 3; do
+    set +e
+    gh api --include "/orgs/${org}/members/${author}" >"${status_file}" 2>/dev/null
+    gh_status=$?
+    set -e
+    status_line=""
+    IFS= read -r status_line <"${status_file}" || status_line=""
+    if [[ "${status_line}" =~ ^HTTP/[0-9.]+[[:space:]]+([0-9]{3}) ]]; then
+      http_status="${BASH_REMATCH[1]}"
+    else
+      http_status=""
+    fi
+    if [[ ${gh_status} -eq 0 && "${http_status}" == 2* ]]; then
+      return 0
+    fi
+    if [[ "${http_status}" == "404" ]]; then
+      return 1
+    fi
+    echo "warning: membership check for ${author} in ${org}, attempt ${attempt}/3, returned HTTP ${http_status:-unknown}" >&2
+    if [[ ${attempt} -lt 3 ]]; then
+      sleep "${attempt}"
+    fi
+  done
+  echo "error: membership check for ${author} in ${org} could not establish a definitive answer" >&2
+  return 125
+}
+
 is_internal_author() {
   local author="$1"
+  local author_association="$2"
+  local membership_cache_key="${author,,}"
+  if [[ "${author_association}" == "OWNER" || "${author_association}" == "MEMBER" ]]; then
+    return 0
+  fi
   [[ -n "${author}" ]] || return 1
-  if [[ -n "${membership_cache[${author}]+x}" ]]; then
-    [[ "${membership_cache[${author}]}" == "internal" ]]
+  if [[ -n "${membership_cache[${membership_cache_key}]+x}" ]]; then
+    [[ "${membership_cache[${membership_cache_key}]}" == "internal" ]]
     return
   fi
   local org
+  local status_file="${work_dir}/membership_status"
   for org in "${orgs[@]}"; do
-    if gh api --silent "/orgs/${org}/members/${author}" >/dev/null 2>&1; then
-      membership_cache["${author}"]="internal"
+    local membership_status=0
+    check_org_membership "${org}" "${author}" "${status_file}" || membership_status=$?
+    if [[ ${membership_status} -eq 0 ]]; then
+      membership_cache["${membership_cache_key}"]="internal"
       return 0
     fi
+    if [[ ${membership_status} -eq 1 ]]; then
+      continue
+    fi
+    if [[ ${membership_status} -ne 125 ]]; then
+      echo "error: invalid membership check return status ${membership_status}" >&2
+    fi
+    return 125
   done
-  membership_cache["${author}"]="external"
+  membership_cache["${membership_cache_key}"]="external"
   return 1
 }
 
@@ -198,21 +253,27 @@ open_count=0
 eligible_count=0
 internal_count=0
 bot_count=0
-while IFS=$'\t' read -r pr_url author author_type created_at repo number state title; do
+while IFS=$'\t' read -r pr_url author author_type author_association created_at repo number state title; do
   [[ -n "${pr_url}" ]] || continue
   open_count=$((open_count + 1))
   if is_bot_author "${author}" "${author_type}"; then
     bot_count=$((bot_count + 1))
     continue
   fi
-  if is_internal_author "${author}"; then
+  membership_status=0
+  is_internal_author "${author}" "${author_association}" || membership_status=$?
+  if [[ ${membership_status} -gt 1 ]]; then
+    echo "error: organization membership discovery cannot continue safely" >&2
+    exit 2
+  fi
+  if [[ ${membership_status} -eq 0 ]]; then
     internal_count=$((internal_count + 1))
     continue
   fi
   eligible_count=$((eligible_count + 1))
   printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n' \
     "${pr_url}" "${author}" "${created_at}" "${repo}" "${number}" "${state}" "${title}" "0" >> "${filtered_file}"
-done < <(sort -t $'\t' -k4,4r -k1,1 "${open_file}")
+done < <(sort -t $'\t' -k5,5r -k1,1 "${open_file}")
 
 if [[ "${output_file}" == "-" ]]; then
   cat "${filtered_file}"

@@ -1,8 +1,15 @@
 #!/usr/bin/env python3
+"""Capture complete reviewer- and automated-bot-owned PR review threads."""
+
+from __future__ import annotations
+
 import argparse
+import hashlib
 import json
+import os
 import re
 import subprocess
+import tempfile
 from pathlib import Path
 from typing import Any
 
@@ -89,6 +96,10 @@ def authenticated_login() -> str:
     return login
 
 
+def body_sha256(body: Any) -> str:
+    return hashlib.sha256(str(body or "").encode("utf-8")).hexdigest()
+
+
 def fetch_extra_comments(thread_id: str, after: str | None) -> list[dict[str, Any]]:
     result: list[dict[str, Any]] = []
     cursor = after
@@ -117,7 +128,6 @@ def fetch_unified_replies(
     pr_author: str,
     mentioned_logins: list[str],
 ) -> list[dict[str, Any]]:
-    """Top-level issue comments posted by the PR author that mention the reviewer or an automated review bot."""
     unified: list[dict[str, Any]] = []
     cursor: str | None = None
     while True:
@@ -141,6 +151,7 @@ def fetch_unified_replies(
                     "databaseId": node.get("databaseId"),
                     "author": node.get("author"),
                     "body": body,
+                    "body_sha256": body_sha256(body),
                     "url": node.get("url"),
                     "createdAt": node.get("createdAt"),
                 }
@@ -154,13 +165,9 @@ def fetch_unified_replies(
 def snapshot(repo_full_name: str, number: int, reviewer: str) -> dict[str, Any]:
     owner, repo = repo_full_name.split("/", 1)
     reviewer_lower = reviewer.lower()
-    automated_review_logins = {
-        "copilot",
-        "copilot-pull-request-reviewer",
-        "chatgpt-codex-connector",
-    }
-    cursor = None
-    pr_info = None
+    automated_review_logins = {"copilot", "copilot-pull-request-reviewer", "chatgpt-codex-connector"}
+    cursor: str | None = None
+    pr_info: dict[str, Any] | None = None
     all_threads: list[dict[str, Any]] = []
     while True:
         data = gh_graphql(
@@ -184,25 +191,34 @@ def snapshot(repo_full_name: str, number: int, reviewer: str) -> dict[str, Any]:
             break
         cursor = connection["pageInfo"]["endCursor"]
 
-    pr_author = ((pr_info or {}).get("author") or {}).get("login") or ""
-    mentioned_logins = [reviewer] + list(automated_review_logins)
+    if pr_info is None:
+        raise SystemExit(f"error: PR response had no metadata: {repo_full_name}#{number}")
+    pr_author = ((pr_info.get("author") or {}).get("login") or "")
+    if not pr_author:
+        raise SystemExit("error: PR snapshot has no author login")
+    mentioned_logins = [reviewer, *sorted(automated_review_logins)]
     unified_replies = fetch_unified_replies(owner, repo, number, pr_author, mentioned_logins)
-    selected = []
+
+    selected: list[dict[str, Any]] = []
     for thread in all_threads:
         comments = thread["comments"]
         if not comments:
             continue
-        root_author = (comments[0].get("author") or {}).get("login") or ""
+        root = comments[0]
+        root_author = (root.get("author") or {}).get("login") or ""
         root_author_lower = root_author.lower()
         if root_author_lower != reviewer_lower and root_author_lower not in automated_review_logins:
             continue
         author_replies = [
-            comment["url"]
+            {
+                "url": comment["url"],
+                "body": comment.get("body") or "",
+                "body_sha256": body_sha256(comment.get("body")),
+                "created_at": comment.get("createdAt"),
+            }
             for comment in comments[1:]
             if ((comment.get("author") or {}).get("login") or "").lower() == pr_author.lower()
         ]
-        root = comments[0]
-        root_commit_sha = ((root.get("commit") or {}).get("oid") or "")
         root_original_commit_sha = ((root.get("originalCommit") or {}).get("oid") or "")
         selected.append(
             {
@@ -210,18 +226,21 @@ def snapshot(repo_full_name: str, number: int, reviewer: str) -> dict[str, Any]:
                 "root_author": root_author,
                 "root_author_is_reviewer": root_author_lower == reviewer_lower,
                 "root_author_is_automated": root_author_lower in automated_review_logins,
-                "author_reply_urls": author_replies,
-                "root_comment_commit_sha": root_commit_sha,
+                "root_body": root.get("body") or "",
+                "root_body_sha256": body_sha256(root.get("body")),
+                "root_created_at": root.get("createdAt"),
+                "author_replies": author_replies,
+                "author_reply_urls": [reply["url"] for reply in author_replies],
+                "root_comment_commit_sha": ((root.get("commit") or {}).get("oid") or ""),
                 "root_original_commit_sha": root_original_commit_sha,
                 "head_changed_since_comment": bool(
-                    root_original_commit_sha
-                    and root_original_commit_sha != pr_info["headRefOid"]
+                    root_original_commit_sha and root_original_commit_sha != pr_info["headRefOid"]
                 ),
             }
         )
 
     return {
-        "version": 2,
+        "version": 3,
         "repo": repo_full_name,
         "number": number,
         "pr_url": pr_info["url"],
@@ -233,19 +252,44 @@ def snapshot(repo_full_name: str, number: int, reviewer: str) -> dict[str, Any]:
         "unified_replies": unified_replies,
         "total_comments": len(selected),
         "closed_comments": sum(1 for thread in selected if thread["isResolved"]),
+        "open_threads": sum(1 for thread in selected if not thread["isResolved"]),
     }
 
 
+def write_json_atomic(path: Path, value: dict[str, Any]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    fd, temporary_name = tempfile.mkstemp(prefix=f".{path.name}.", dir=path.parent)
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as handle:
+            json.dump(value, handle, indent=2, sort_keys=True)
+            handle.write("\n")
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.replace(temporary_name, path)
+    finally:
+        try:
+            os.unlink(temporary_name)
+        except FileNotFoundError:
+            pass
+
+
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Snapshot reviewer- or automated-bot-owned PR review threads")
+    parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--repo", required=True, help="OWNER/REPO")
     parser.add_argument("--number", type=int, required=True)
     parser.add_argument("--output", type=Path, required=True)
     args = parser.parse_args()
     result = snapshot(args.repo, args.number, authenticated_login())
-    args.output.parent.mkdir(parents=True, exist_ok=True)
-    args.output.write_text(json.dumps(result, indent=2, sort_keys=True) + "\n", encoding="utf-8")
-    print(json.dumps({key: result[key] for key in ("pr_url", "head_sha", "total_comments", "closed_comments")}, sort_keys=True))
+    write_json_atomic(args.output, result)
+    print(
+        json.dumps(
+            {
+                key: result[key]
+                for key in ("pr_url", "head_sha", "total_comments", "closed_comments", "open_threads")
+            },
+            sort_keys=True,
+        )
+    )
 
 
 if __name__ == "__main__":
