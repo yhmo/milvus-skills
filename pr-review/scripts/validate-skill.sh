@@ -88,4 +88,19 @@ if ! grep -F 'Any PR that adds or modifies a public API surface' "$skill_dir/SKI
   exit 1
 fi
 
+if grep -q '最多' "$skill_dir/SKILL.md"; then
+  echo "SKILL.md contains a Chinese instruction; keep instructions in English" >&2
+  exit 1
+fi
+
+if ! grep -q 'PR_REVIEW_CONCURRENCY' "$skill_dir/SKILL.md"; then
+  echo "rate-limit budget is missing the PR_REVIEW_CONCURRENCY override" >&2
+  exit 1
+fi
+
+if ! grep -q 'For draft PRs' "$skill_dir/SKILL.md"; then
+  echo "SKILL.md is missing the draft-PR handling rule" >&2
+  exit 1
+fi
+
 echo "skill structure ok: $skill_dir"

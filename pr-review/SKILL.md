@@ -138,6 +138,8 @@ Treat every review as exhaustive unless the user explicitly limits the scope. Re
 
 Before starting Step 1, probe the active model provider's per-key request quota and derive a concurrency budget for any subagent delegation. Do this once at the start of the review; reuse the recorded budget if the workflow is resumed.
 
+If the environment variable `PR_REVIEW_CONCURRENCY` is set to a positive integer, use it directly as `N`, record that the budget came from the override, and skip the probe entirely.
+
 1. Resolve the provider base URL and API key from the active agent configuration:
    - codex: read `~/.codex/config.toml` `[model_providers.*]` `base_url` (strip a trailing `/v1`) and `experimental_bearer_token`; if no bearer token is present, read the key from `apiKeys.codexEnvVar` or `OPENAI_API_KEY`.
    - opencode: read `~/.config/opencode/opencode.json` `provider.*.options.baseURL` and `provider.*.options.apiKey`.
@@ -151,10 +153,10 @@ Before starting Step 1, probe the active model provider's per-key request quota 
    Use the actual model ID the review will run with when it is known; otherwise use the provider default.
 3. Read the rate-limit headers from the response (case-insensitive). Primary header for this deployment: `x-ratelimit-api_key-remaining-requests`; also read `x-ratelimit-api_key-limit-requests`. Fallbacks if absent: any `x-ratelimit-*-remaining-requests`, then `x-ratelimit-remaining-requests`. If the response is HTTP 429, treat remaining as `0`.
 4. Compute the concurrency budget: `N = max(1, min(10, floor(remaining / 4)))`, where `remaining` is the per-key remaining request count.
-5. Record `N` in the running review notes, then whenever you delegate work to parallel subagents (e.g. `@general` task fan-out for large PRs), obey this instruction verbatim: **「最多 N 个并发子任务、等前一个完成再开下一个」**, replacing `N` with the computed value.
+5. Record `N` in the running review notes, then whenever you delegate work to parallel subagents (e.g. `@general` task fan-out for large PRs), obey this instruction verbatim: **"At most N concurrent subtasks; start the next only after the previous one completes."**, replacing `N` with the computed value.
 6. If the provider headers cannot be obtained, default `N = 2` and proceed; do not block the review on the probe.
 
-Example: `x-ratelimit-api_key-remaining-requests: 29` → `N = min(10, floor(29/4)) = 7` → prompt subagents with 「最多 7 个并发子任务、等前一个完成再开下一个」.
+Example: `x-ratelimit-api_key-remaining-requests: 29` → `N = min(10, floor(29/4)) = 7` → prompt subagents with "At most 7 concurrent subtasks; start the next only after the previous one completes."
 
 ### Review timing
 
@@ -250,6 +252,7 @@ Perform this during Step 1, after fetching PR metadata and before summarizing in
 Fetch PR metadata with `gh api repos/:owner/:repo/pulls/<PR_NUMBER>` and summarize the changed files, overall intent, intended user/business flow, and risk areas before deeper review.
 - Fetch the commit list with `gh api repos/:owner/:repo/pulls/<PR_NUMBER>/commits`. For Milvus-family repositories, apply the commit-hygiene rule: each PR must contain exactly one commit, and every commit must carry a `Signed-off-by:` trailer. Add a `Low` candidate when either rule is violated, unless the user explicitly scoped the review away from commit hygiene.
 - Fetch CI context with `gh api repos/:owner/:repo/commits/<HEAD_SHA>/check-runs` plus `.../status`. Record failing or pending checks as review context; when a red check maps to changed files, name it in the risk-priority triage. Do not treat green CI as evidence of correctness.
+- For draft PRs, proceed with the review normally: record the draft status in the Step 1 summary and in the final review message, and phrase findings as early feedback rather than merge-blocking when the draft clearly indicates ongoing work.
 - Run the generated-file heuristic on the changed-file list before deep review: intersect it with the repository's committed generated-output locations — pymilvus `pymilvus/grpc_gen/*_pb2*.py` and `*.pyi`; milvus `internal/mocks/` and `mock_*.go`; milvus `client/milvusclient/mock_milvus_server_test.go`; milvus-sdk-node `milvus/proto-json/*.ts`; plus any path the loaded repository skill or `AGENTS.md` marks as generated. Add a candidate finding for hand-edits to generated files unless the PR also changes the generator inputs or explicitly regenerates output; verify through the repository's regeneration workflow instead.
 - Before writing the summary, complete the linked-resource context collection above and list the resources inspected. If the PR has no directly relevant linked resources, state that explicitly.
 - Incorporate linked-resource evidence into the motivation, intended flow, acceptance criteria, compatibility requirements, known limitations, and review-risk summary. Do not summarize intent from the PR body alone when linked context is available.
@@ -292,6 +295,8 @@ Load applicable checklists before starting, based on the PR classification from 
 - The diff changes proto definitions, a proto submodule pin, shared error-code definitions, storage/segment formats, or any wire contract consumed by sibling repositories: load [references/checklists/cross-repo.md](references/checklists/cross-repo.md)
 
 A checklist that exists and applies but was not loaded requires a one-line justification in the ledger.
+
+Language-specific examples in this workflow are illustrative, not exhaustive: translate each pattern to the PR's actual language. For example, an unhandled promise rejection in TypeScript corresponds to an unchecked error return plus an unrecovered goroutine panic in Go, an `unwrap` on `None` in Rust, or a swallowed checked exception in Java.
 
 **3a. Correctness pass** — exercise each lens below deliberately:
 - Surface: typos, wrong variable names, missing returns, copy-paste errors
@@ -525,6 +530,7 @@ For every candidate matched to a resolved, non-outdated thread, record `previous
   - `bug` when the reviewer is pointing out a concrete correctness, compatibility, safety, or contract issue
   - `question` when the reviewer needs the author to explain an assumption or intent before deciding whether something is wrong
   - `suggestion` when the point is valid but advisory rather than required for correctness
+  - For dynamically typed languages (Python, JavaScript/TypeScript), when a finding depends on cross-file type inference that reading alone cannot confirm, prefer the `question` shape over `bug` unless repository evidence directly proves the incorrect behavior
 - Use this comment-shape classification to refine phrasing, but do not let it override severity or blocking disposition
 - Treat the comment-body format as mandatory, not advisory: do not post or patch any comment until the body has been checked against this exact two-line shape.
 - Format every posted comment body as exactly two logical lines before any optional extra detail:
