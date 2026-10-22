@@ -73,7 +73,8 @@ milvus-common `include/`, knowhere `include/knowhere/`, milvus-storage FFI).
 
 - For caches, memoized defaults, and shared maps introduced by the PR, ask
   whether state is scoped correctly per client / session / database /
-  collection rather than silently becoming process-global or cross-tenant.
+  collection (or the domain's equivalent ownership scopes) rather than
+  silently becoming process-global or cross-tenant.
 - For shared mutable state introduced by the PR, ask whether one client,
   session, database, collection, or request can clear, overwrite, or reuse
   another scope's cached state, timestamps, memoized defaults, or progress

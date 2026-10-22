@@ -103,4 +103,14 @@ if ! grep -q 'For draft PRs' "$skill_dir/SKILL.md"; then
   exit 1
 fi
 
+if ! grep -q "For other repositories, check the repository's own" "$skill_dir/SKILL.md"; then
+  echo "commit-hygiene rule must cover non-Milvus repositories via their own conventions" >&2
+  exit 1
+fi
+
+if ! grep -q 'For any other repository, identify its consumers' "$skill_dir/references/checklists/cross-repo.md"; then
+  echo "cross-repo checklist consumer map must have a non-Milvus fallback" >&2
+  exit 1
+fi
+
 echo "skill structure ok: $skill_dir"

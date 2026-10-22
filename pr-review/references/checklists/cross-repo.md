@@ -9,9 +9,12 @@ any wire contract consumed by sibling repositories.
 - Name the changed contract: a proto message/RPC, an error-code family
   (milvus `merr`, milvus-common `EasyAssert`), a storage format version, a
   REST route, or a public module.
-- Map the consumers: milvus server (`pkg/`), the SDKs (pymilvus,
-  milvus-sdk-java/cpp/csharp/node/rust, and the Go `client/` module),
-  milvus-common, knowhere/cardinal, birdwatcher.
+- Map the consumers: for Milvus-family repositories, use milvus server
+  (`pkg/`), the SDKs (pymilvus, milvus-sdk-java/cpp/csharp/node/rust, and
+  the Go `client/` module), milvus-common, knowhere/cardinal, and
+  birdwatcher. For any other repository, identify its consumers from the
+  repository's own dependency graph, docs, or downstream importers instead
+  of assuming the Milvus map.
 - Record the dependency direction: server-to-SDK one-way, shared-library
   fan-out, or bidirectional.
 
