@@ -82,10 +82,17 @@ Before Step 1, inspect the PR metadata and try to load the matching repository s
    - `milvus-io/milvus` -> `milvus`
    - `milvus-io/milvus-sdk-cpp` -> `milvus-sdk-cpp`
    - `milvus-io/milvus-sdk-csharp` -> `milvus-sdk-csharp`
+   - `milvus-io/milvus-sdk-node` -> `milvus-sdk-node`
    - `milvus-io/milvus-sdk-java` -> `milvus-sdk-java`
    - `milvus-io/milvus-sdk-rust` -> `milvus-sdk-rust`
    - `milvus-io/pymilvus` -> `pymilvus`
    - `milvus-io/conanfiles` -> `milvus-conanfiles`
+   - `milvus-io/milvus-storage` -> `milvus-storage`
+   - `milvus-io/birdwatcher` -> `birdwatcher`
+   - `zilliztech/milvus-common` -> `milvus-common`
+   - `zilliztech/knowhere` -> `knowhere`
+   - `zilliztech/cardinal` -> `cardinal`
+   - `zilliztech/VectorDBBench` -> `vectordbbench`
 3. Resolve the skill from the available-skills catalog and use its declared locator. If it is not listed there, try `<skills-root>/<skill-name>/SKILL.md` as a filesystem fallback, where `<skills-root>` is the directory that directly contains this skill (`$(dirname "$SKILL_DIR")` when `$SKILL_DIR` is the base directory of `pr-review` itself; never hardcode a `.codex`, `.opencode`, or other agent-specific prefix). Read the matching `SKILL.md` completely before technical review actions and follow its repository-specific architecture, compatibility, history, and code-reading guidance.
 4. Record which repository skill was loaded. If the mapped skill is unavailable or unreadable, record that briefly and continue with this skill's workflow rather than stopping the review.
 
@@ -95,7 +102,7 @@ For local surrounding-code and history context, prefer the matching checkout whe
 - Do not fetch, pull, switch branches, reset, clean, or otherwise modify the checkout as part of review.
 - Do not assume the checkout matches the PR head or target branch. Fetch every changed file, anchored file, helper, and test at the current head SHA with `gh api` before citing its content in a finding. Validate changed code, line anchors, branch-local symbols, and PR metadata with `gh api`.
 - `gh api only` means all GitHub reads and writes must use `gh api`; it does not prohibit read-only inspection of the matching local checkout.
-- This `pr-review` skill remains authoritative for the 11-step workflow, COMMENT-only behavior, anchor validation, and posting format. The repository skill supplies domain-specific technical guidance. Do not build or run tests when this skill prohibits them, even if the repository skill documents build/test commands.
+- This `pr-review` skill remains authoritative for the 12-step workflow, COMMENT-only behavior, anchor validation, and posting format. The repository skill supplies domain-specific technical guidance. Do not build or run tests when this skill prohibits them, even if the repository skill documents build/test commands.
 
 ## Core Workflow
 

@@ -56,6 +56,18 @@ if ! grep -q '3g\. Cross-repository consistency pass' "$skill_dir/SKILL.md"; the
   exit 1
 fi
 
+for repo in milvus-sdk-node milvus-storage birdwatcher milvus-common knowhere cardinal vectordbbench; do
+  if ! grep -q "$repo" "$skill_dir/SKILL.md"; then
+    echo "routing map is missing repository skill: $repo" >&2
+    exit 1
+  fi
+done
+
+if grep -q '11-step workflow' "$skill_dir/SKILL.md"; then
+  echo "off-by-one reference: '11-step workflow' should be '12-step workflow'" >&2
+  exit 1
+fi
+
 if grep -q 'Steps 1-11' "$skill_dir/SKILL.md"; then
   echo "off-by-one reference: 'Steps 1-11' should be 'Steps 1-12'" >&2
   exit 1
