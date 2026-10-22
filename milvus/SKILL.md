@@ -32,6 +32,7 @@ Work from repository evidence. Treat this skill as a workflow and navigation lay
    - Change constraints and behavioral verification: [references/change-rules.md](references/change-rules.md)
    - Build, test, lint, and generation commands: [references/build-and-test.md](references/build-and-test.md)
    - Branch differences (2.6 vs 3.0 vs master): [references/branch-differences.md](references/branch-differences.md)
+   - Pinned Knowhere/Cardinal, milvus-common, and milvus-storage versions: [references/dependency-versions.md](references/dependency-versions.md)
 
 Run `scripts/repo-context.sh` when a quick current-checkout snapshot would help. Execute it from any directory inside the Milvus checkout.
 
@@ -41,7 +42,8 @@ Run `scripts/repo-context.sh` when a quick current-checkout snapshot would help.
 2. Trace the behavior end to end across its actual boundaries: public/protobuf API, Proxy, coordinator, node, storage/WAL or segcore, response/error projection, tests, and metrics as applicable.
 3. Read both callers and callees. Include retry loops, caches, async callbacks, recovery paths, and generated boundaries when they can change the result.
 4. For a documented subsystem, follow the checkout's mandatory sequence exactly: read the top-level guide, read all required sub-documents, read their Key Packages, then cross-check documentation against source. For design or cross-component work, read every subsystem sub-document. Stop and ask the user if subsystem docs and source contradict each other.
-5. Base conclusions on documentation plus source. Cite concrete paths and distinguish verified behavior from inference.
+5. Before tracing behavior into Knowhere, Cardinal, milvus-common, or milvus-storage, resolve their exact pins from the Milvus ref under review with [references/dependency-versions.md](references/dependency-versions.md). Read the related repository at that resolved ref, not merely at its preferred checkout or current development branch.
+6. Base conclusions on documentation plus source. Cite concrete paths and distinguish verified behavior from inference.
 
 ## Implement changes
 
