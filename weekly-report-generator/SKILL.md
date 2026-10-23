@@ -1,6 +1,6 @@
 ---
 name: weekly-report-generator
-description: Generates a weekly engineering report / 周报 in Markdown with exactly these sections: Time, Summary, Work items, and Plan for next week. After generating, automatically publishes the report into a Feishu (飞书) wiki document following the hierarchy "root page → YYYYMMDD (Friday) sub-doc → <user name> sub-doc", and returns the published link. The root page defaults to the wiki page titled "Milvus I 周报" (auto-discovered when no wiki URL is given). Use when the user asks to draft, update, or polish a weekly report, summarize this week’s work, turn tasks/PRs into a status report, or asks in Chinese for 周报、本周周报、上周周报、工作总结、PR 周报、下周计划.
+description: "Generates a weekly engineering report / 周报 in Markdown with exactly these sections: Time, Summary, Work items, and Plan for next week. After generating, automatically publishes the report into a Feishu (飞书) wiki document following the hierarchy root page, YYYYMMDD Friday sub-document, user-name sub-document, and returns the published link. The root page defaults to the wiki page titled \"Milvus I 周报\" (auto-discovered when no wiki URL is given). Use when the user asks to draft, update, or polish a weekly report, summarize this week's work, turn tasks/PRs into a status report, or asks in Chinese for 周报、本周周报、上周周报、工作总结、PR 周报、下周计划."
 ---
 
 # Weekly Report Generator
@@ -32,6 +32,8 @@ The root wiki node is resolved in this priority order:
 The weekly report is written into the `<user name>` page, and the page URL is returned to the user.
 
 Platform support:
+- The bundled `scripts/resolve_default_window.py` computes the default local/UTC report window.
+- The bundled `scripts/compare_time_window.py` makes existing-page publishing idempotent by comparing `## Time` windows.
 - The bundled `scripts/scan_weekly_prs.sh` supports both Linux and macOS.
 - Requirements: `gh` and `python3`.
 - Feishu publishing requires the `lark-cli` binary and an active user login (see Prerequisites).
@@ -125,11 +127,17 @@ gh auth login
 Preflight:
 ```bash
 command -v lark-cli
-lark-cli auth status --format json
+LARKSUITE_CLI_NO_UPDATE_NOTIFIER=1 LARKSUITE_CLI_NO_SKILLS_NOTIFIER=1 \
+  lark-cli auth status --json --verify
 ```
 
 - If `lark-cli` is missing, inform the user that Feishu publishing needs it installed (skip publishing but still save the report file).
-- If the session is not logged in, ask the user to run `lark-cli auth login` (per `lark-shared`) before publishing.
+- Interpret that auth output before publishing:
+  - The required state is an available user identity (`identities.user.available == true`) with a usable token. Continue without prompting for authorization when this is true.
+  - If the user identity is missing/expired (for example `tokenStatus == "expired"` or the status says the refresh token expired), this is an **authentication-session expiry**, not a missing wiki permission. Tell the user that Feishu user authorization expired and needs to be refreshed.
+  - For that expired/missing session, use the `lark-shared` split-flow once and request the whole weekly-report workflow scope set: `auth login --domain wiki --domain docs --domain drive --domain contact --no-wait --json`. Do not initiate scope-only reauthorization.
+  - Only call `auth login --scope <scope>` for a real user-identity `missing_scope`/authorization error returned by an API call while a usable user token exists. A `token_missing`/expired-token error must be handled as session reauthorization, even if its hint names scopes such as `wiki:node:retrieve`.
+  - Do not use `auth check` as the first preflight when no user token exists: it can report scopes as "missing" even though the actual problem is that there is no usable token.
 - Always use `--as user` for wiki and doc operations (wiki pages are user resources; the bot identity lacks the required scopes).
 
 A target root wiki node must be resolvable:
@@ -181,6 +189,19 @@ If auto-trigger does not happen, explicitly ask:
 - Collect or infer:
   - time range from the user
   - GitHub account (prefer `git config --global user.name` mapping to login, or ask user)
+- **Default time window:** when the user does not provide an explicit start/end, use local
+  `上周五 10:00` through the current local time. Here `上周五` means the Friday of the
+  previous calendar/ISO week, not merely the most recent past Friday. Do not ask the user
+  for a time range when this default applies. Resolve it deterministically:
+
+   ```bash
+   python3 "$SKILL_DIR/scripts/resolve_default_window.py"
+   ```
+
+   Use the returned `utc_start` and `utc_end` for PR scanning, and `local_start` and
+   `local_end` in `## Time`. Any explicit user-provided start/end overrides this default.
+   A request such as “生成周报” or “generate my weekly report” with no time range uses
+   this default.
 - Accept user time input in local time by default unless the user explicitly says UTC.
 - Detect local timezone before conversion:
   - `date +%Z`
@@ -225,6 +246,7 @@ If auto-trigger does not happen, explicitly ask:
 - Language rules:
   - If the report is in English, use a single plain-text line like: `From 2026-06-05 15:00 CST to 2026-06-12 15:00 CST`.
   - If the report is in Chinese, use a single plain-text line like: `从 2026年6月5日 15:00 到 2026年6月12日 15:00`.
+  - With the default window, these follow the same shape, e.g. `From 2026-10-16 10:00 CST to 2026-10-23 12:30 CST` / `从 2026年10月16日 10:00 到 2026年10月23日 12:30`.
 - Do not invent a different time window than the one actually used.
 - Do not render the time window as bullets.
 
@@ -309,7 +331,7 @@ If auto-trigger does not happen, explicitly ask:
 
 ### Step 8: Publish report to Feishu (automatic; default target is the "Milvus I 周报" wiki page)
 
-> **⚠️ HARD RULE (top priority):** This skill may **ONLY ADD** content to the Feishu document. It must **NEVER delete, replace, or overwrite anything** that already exists in the document. Only `docs +update --command append` / `block_insert_after` may be used. `overwrite`, `block_delete`, `block_replace`, and `str_replace` are forbidden on the Feishu document.
+> **⚠️ HARD RULE (top priority):** Before writing to an existing personal weekly-report page, fetch it and compare its `## Time` window with the generated report. If the windows are the same, skip writing. If the windows differ, overwrite that personal page directly with the generated report. Do not ask for confirmation in either case. Never modify the root page, another date page, or another person's page.
 
 After the report file is saved and verified, publish it to Feishu automatically. Follow this hierarchy (also read the root page itself if it documents its own instructions — for example the `Milvus I 周报` page instructs `root → YYYYMMDD → <user name>` and defines update semantics):
 
@@ -362,26 +384,37 @@ After the report file is saved and verified, publish it to Feishu automatically.
    ```
    Record `data.obj_token` (the docx token) and `data.node_token`.
 
-6. **Write the report into the personal docx.** The publish content is exactly the content of the report file saved in Step 7 (`[final output path]`). Use Markdown format. Pass the content via stdin heredoc to avoid shell-escaping issues; if the report file is under the current working directory you may also use `--content @<relative-path>`, otherwise prefer stdin.
-
-   **HARD RULE — only add, never delete.** Whatever the state of the page, this skill must never delete, replace, or remove any existing content in the Feishu document:
-   - Only use `docs +update --command append` (or `block_insert_after` to insert new blocks after an anchor). Both only add content and never touch existing blocks.
-   - Never use `--command overwrite` (clears the whole document), `block_delete`, `block_replace`, or `str_replace` (these delete or overwrite existing content) on the Feishu document.
-   - This overrides any "replace" semantics documented in the root page (e.g. `Milvus I 周报`'s "Summary → replace / Plan → replace"): even then, do not replace — append instead.
+6. **Make publishing idempotent by the report Time window.** The publish content is exactly the content of the report file saved in Step 7 (`[final output path]`). Before writing, fetch the current personal page and compare its `## Time` window with the generated report:
 
    ```bash
-   # New/empty page, or page already has content: always append (only-add)
-   # Content = the exact markdown written to [final output path] in Step 7
-   lark-cli docs +update --doc <obj_token> --command append --doc-format markdown --content - <<'EOF'
+   existing_fetch=$(mktemp "${TMPDIR:-/tmp}/weekly-report-existing.XXXXXX")
+   lark-cli docs +fetch --doc <obj_token> --doc-format markdown --format json --as user \
+     > "$existing_fetch"
+
+   python3 "$SKILL_DIR/scripts/compare_time_window.py" \
+     --new "[final output path]" \
+     --existing "$existing_fetch"
+   ```
+
+   Interpret the helper result without asking the user:
+   - `decision == "skip"` — the existing page already has the same normalized start/end Time window. Do not call `docs +update`; retain the existing page exactly as-is and report that publishing was skipped.
+   - `decision == "overwrite"` — the existing page is empty, has no parseable Time window, or has a different normalized start/end Time window. Overwrite the entire personal page with the generated report.
+
+   The comparison is based on the normalized start and end local datetime values in `## Time`, not on wording, timezone labels, or formatting. If either boundary differs, the windows are different.
+
+   When the decision is `overwrite`, write the exact generated Markdown via stdin:
+
+   ```bash
+   lark-cli docs +update --doc <obj_token> --command overwrite --doc-format markdown --content - <<'EOF'
    <content of the saved report file, verbatim>
    EOF
    ```
-   - On a brand-new empty page, appending writes the full report as its content.
-   - If the page already has content this week, append the report at the end without modifying existing content. Inform the user that content was appended (never replaced), so they can clean up any duplicate sections manually if needed.
-   - If `--content @<file>` is used instead of stdin, the file must be a relative path under the current working directory (`@/absolute/path` is rejected).
+
+   Do not ask for confirmation before this overwrite. This intentional whole-page replacement applies only to the current user's personal page under the resolved date node; it never applies to the root page, another date page, or another person's page. Remove the temporary fetch file after the decision/write completes.
 
 7. **Verify and report.**
-   - Confirm the write: `lark-cli docs +fetch --doc <obj_token>` (content matches the report).
+   - If the page was overwritten, confirm the write: `lark-cli docs +fetch --doc <obj_token>` (content matches the report).
+   - If publishing was skipped because the Time window was identical, do not write or fetch again; use the already fetched existing page as verification that the page remains unchanged.
    - Build the published page URL from the root URL base: `<root_url_base>/wiki/<personal_node_token>` (e.g. `https://zilliverse.feishu.cn/wiki/<personal_node_token>`).
    - Include this URL in the assistant response together with the full report content and the saved file path.
 
@@ -403,12 +436,13 @@ If no root wiki node could be resolved (no user-provided URL and the default `Mi
   - Use `--as user` for all Feishu wiki/doc operations.
   - Date node title is the `YYYYMMDD` Friday of the current ISO week (computed via the shell command in Step 8); personal node title is the user's lark `name` verbatim.
   - If the `YYYYMMDD` date node or the personal node is missing, create it automatically with `wiki +node-create` (additive, low-risk) — never block publishing waiting for user confirmation on creation.
-  - **Never delete, replace, or overwrite any existing content in the Feishu document — only add.** Forbidden commands on the Feishu document: `overwrite`, `block_delete`, `block_replace`, `str_replace`. Only `docs +update --command append` / `block_insert_after` are allowed. This is a hard rule that overrides any root-page "replace" semantics.
+  - For an existing personal page, first compare the normalized `## Time` start/end window with the generated report. Same window → skip writing without asking. Different/missing window → overwrite that personal page directly with `docs +update --command overwrite` without asking. Never modify the root page, another date page, or another person's page.
   - Never delete or overwrite another person's page; only create/update the current user's own page.
 
 ## Quality checks before returning
 - Section titles and order are correct.
 - `Time` is present before `Summary` and shows the actual local-time report window.
+- If no explicit time range was supplied, `Time` starts at the previous calendar/ISO week's Friday 10:00 local time and ends at the current local time used for the scan.
 - `Summary` is short and outcome-focused.
 - `Work items` are grouped and have clear status markers.
 - No open PR found by the script is missing from `Work items`.
@@ -419,8 +453,8 @@ If no root wiki node could be resolved (no user-provided URL and the default `Mi
 - Filename matches `weekly-report-[utc date].md` from `date -u +%F`.
 - Final saved file path is included in the response.
 - If publishing to Feishu (user provided a wiki URL, or the default `Milvus I 周报` page was discovered):
-  - `lark-cli` is available and logged in (`lark-cli auth status`).
+  - `lark-cli` is available and a usable user identity was confirmed with `lark-cli auth status --json --verify`; an expired refresh token was not misreported as a missing `wiki:node:retrieve` permission.
   - The `YYYYMMDD` date node (Friday of the current ISO week) exists under the root node (auto-created via `wiki +node-create` if it was missing).
-  - The personal `<user name>` node exists under the date node (auto-created if missing) and contains the report.
-  - Only additions were made to the Feishu document — no existing content was deleted, replaced, or overwritten (report content was appended via `docs +update --command append`).
+  - The personal `<user name>` node exists under the date node (auto-created if missing).
+  - Publishing is idempotent: an existing page with the same normalized Time window was left unchanged; a page with a different or missing Time window was overwritten directly with the generated report.
   - The published page URL is included in the response and the write was verified with `docs +fetch`.
