@@ -80,6 +80,14 @@ Current workflows:
   checks out `needs.select-targets.outputs.tag` in every build job. Package source therefore comes from the exact tag.
 - `.github/workflows/notify-conanfiles.yaml` dispatches the tag and resolved commit to `milvus-io/conanfiles`.
 
+Sequencing caveat: `create-release.yaml` and `notify-conanfiles.yaml` run immediately on a tag push,
+while `release.yaml` performs its ancestry/CI validation after the GitHub release has been created
+and the package/dispatch workflows have been triggered. A tag that fails that validation can
+therefore leave a public GitHub release and a Conan recipe PR even though package builds fail.
+Before pushing a tag, confirm the commit is on the intended release branch with green CI; when
+changing the workflows, consider gating release creation and downstream Conan notification on the
+validation job.
+
 When changing these workflows, preserve repository context for `gh`, exact-tag checkout, platform matrix selection,
 package verification, and artifact attachment semantics.
 

@@ -41,8 +41,8 @@ At the time this skill was written:
 - `CHANGELOG.md` records user-visible release contents and is the release-notes source of truth.
 - `README.md` is the user-facing crate entry point; `DEVELOPMENT.md` owns maintainer setup, build,
   test, coverage, formatting, and protobuf-regeneration guidance.
-- `.github/workflows/publish-release.yml` publishes tag-matched versions to crates.io, creates the
-  GitHub release, and then validates the standalone tutorials against the published crate.
+- `.github/workflows/publish-release.yml` publishes tag-matched versions to crates.io, validates
+  the standalone tutorials against the published crate, and then creates the GitHub release.
 - The post-release job checks `tutorial/1_quickstart/Cargo.toml` for crates.io propagation before
   executing the complete dynamic tutorial set.
 - No benchmark workflow was found.
@@ -132,14 +132,19 @@ For `0.x` crates, compatibility rules can be stricter in practice. Confirm the i
 
 ### 4. Update version metadata
 
-Primary version file:
+On the current `main` line, use the repository's version-bump helper rather than editing the files
+piecemeal:
 
-- `Cargo.toml`
+```bash
+./scripts/bump_version.sh X.Y.Z
+```
 
-Also update the release version used by the standalone tutorials:
+It updates the root `Cargo.toml`, every `tutorial/*/Cargo.toml` exact dependency such as
+`milvus-sdk-rust = "=X.Y.Z"`, and the existing tutorial README version references.
 
-- every `tutorial/*/Cargo.toml` exact dependency, such as `milvus-sdk-rust = "=X.Y.Z"`;
-- every tutorial README sentence or prerequisite that names the SDK version.
+Older maintenance branches may not carry this helper; verify with `git ls-files
+scripts/bump_version.sh` first. If it is absent, make the same focused edits manually and keep the
+root crate and every tutorial pin on the target version.
 
 All tutorial manifests must use the same exact version as the root package and release tag. This is
 required because the post-release `run-tutorial` workflow resolves the tutorials from crates.io
@@ -172,7 +177,7 @@ repository format:
 ```markdown
 ## milvus-sdk-rust X.Y.Z (YYYY-MM-DD)
 
-### Breaking Change
+### Breaking change
 
 - ...
 
@@ -326,7 +331,12 @@ metadata changes. Avoid mixing feature implementation into it.
 
 Only perform this section after explicit maintainer approval.
 
-### 1. Final pre-publish checks
+The current repository uses a tag-driven workflow. For a normal release, do **not** run
+`cargo publish` manually: publishing first would make the version immutable and then make the
+tag-triggered workflow fail on the duplicate upload, potentially preventing the tutorial and
+GitHub-release jobs from running.
+
+### 1. Final release-state checks
 
 Verify clean release state:
 
@@ -339,30 +349,27 @@ cargo publish --dry-run
 
 Confirm the commit being published is the intended release commit.
 
-### 2. Publish to crates.io
+Also confirm the release commit is already on `main` or the intended numeric release branch with
+the required CI checks successful; the workflow rejects a tag that does not satisfy those gates.
 
-Publishing is external and hard to fully undo. Show and confirm before running:
+### 2. Trigger the tag-driven publication
 
-```bash
-cargo publish
-```
-
-If authentication is missing, ask the user to run login/token setup themselves. Do not ask for or store crates.io tokens.
-
-### 3. Tagging
-
-Only tag after confirming project policy and publish order.
-
-Common tag pattern:
+Show and confirm the exact version, commit, and tag command before mutating remote state:
 
 ```bash
 git tag -a vX.Y.Z -m "vX.Y.Z"
 git push origin vX.Y.Z
 ```
 
-Do not create or push tags without explicit confirmation.
+Pushing the stable tag starts `.github/workflows/publish-release.yml`. Do not create or push the
+tag without explicit confirmation.
 
-### 4. Post-release verification
+Only run `cargo publish` manually if a maintainer explicitly requires bypassing the workflow. In
+that case, also confirm how the GitHub release and post-release tutorial validation will be created
+without re-triggering the duplicate publish. If authentication is missing, ask the user to run
+login/token setup themselves. Do not ask for or store crates.io tokens.
+
+### 3. Post-release verification
 
 After publishing, verify:
 
@@ -377,12 +384,14 @@ If docs.rs fails, inspect build logs and prepare a follow-up fix rather than rep
 
 The tag-driven `.github/workflows/publish-release.yml` performs these phases in order:
 
-1. validate the tag, root crate version, and every tutorial dependency pin;
-2. test, dry-run, and publish the crate;
-3. create the GitHub release;
-4. retry `cargo check` on `tutorial/1_quickstart/Cargo.toml` up to 20 times at 15-second intervals
+1. validate tag ancestry and required CI checks, check formatting, and run the tutorials against
+   the local checkout;
+2. validate the tag, root crate version, every tutorial dependency pin, and changelog entry; run
+   library and V2 unit tests; then dry-run and publish the crate;
+3. retry `cargo check` on `tutorial/1_quickstart/Cargo.toml` up to 20 times at 15-second intervals
    while crates.io propagates, then run `scripts/run_tutorials.sh`, which starts Milvus and executes
-   every tutorial under `tutorial/`.
+   every tutorial under `tutorial/`;
+4. create the GitHub release only after the published-crate tutorial run succeeds.
 
 ## Yank / rollback guidance
 

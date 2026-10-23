@@ -72,12 +72,24 @@ The root POM has release/publishing setup:
 
 The tag-driven workflow is `.github/workflows/publish-release.yaml`:
 
-1. It checks out the exact `vX.Y.Z` tag and validates that it matches the root `revision`.
-2. It sets up Temurin Java 8 and Maven Central/GPG credentials.
-3. It runs the release profile with tests skipped, signs and uploads all reactor artifacts, and waits for Central state `PUBLISHED`.
-4. Only after successful publication does it create/update the non-draft GitHub release.
+1. Its validation job checks that the tag commit is contained in `master` or a numeric release
+   branch, resolves the PR that produced the commit, and requires successful `Build and test on
+   ubuntu` and `Build and test on windows` checks on that PR's head commit.
+2. Its publish job checks out the exact `vX.Y.Z` tag, verifies that the tag version matches the
+   root `revision`, and requires a matching `CHANGELOG.md` entry.
+3. It sets up Temurin Java 8 and Maven Central/GPG credentials, then deploys the Java 8 reactor
+   (the parent POM, `sdk-core`, and `sdk-bulkwriter`) with tests skipped and waits for Central
+   state `PUBLISHED`.
+4. It switches to Temurin Java 17 and separately deploys `sdk-spring-boot-starter`; that module is
+   excluded from the Java 8 reactor because Spring Boot requires Java 17.
+5. Only after both Maven deployments succeed does it create/update the non-draft GitHub release.
+6. Publishing that GitHub release triggers `.github/workflows/release_event.yml`, which dispatches
+   `milvus-io/web-content` to refresh the published API reference.
 
-When reviewing a release run, confirm the Central deployment ID reached `successfully published`, all three reactor entries succeeded, public Maven URLs resolve, and the GitHub release job ran after the publish job.
+When reviewing a release run, confirm both Maven deploy steps reached `successfully published`,
+public Maven URLs resolve for `milvus-sdk-java`, `milvus-sdk-java-bulkwriter`, and
+`milvus-sdk-java-spring-boot-starter`, the GitHub release job ran after the publish job, and the
+web-content dispatch succeeded.
 
 Do not run release publishing commands unless the user explicitly asks and confirms credentials/environment are ready.
 

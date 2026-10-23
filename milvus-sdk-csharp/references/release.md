@@ -88,12 +88,26 @@ Important:
 
 ## Changelog
 
-`CHANGELOG.md` is the source of truth for user-visible release contents. It lists dated version
-entries with feature/fix bullet points. When preparing a release:
+`CHANGELOG.md` is the source of truth for user-visible release contents. When preparing a release:
 
 1. Read the existing changelog before adding an entry.
-2. Add a new dated entry near the top following the repository's existing format, e.g.
-   `- YYYY-MM-DD **X.Y.Z**` with concise user-visible bullets.
+2. Add a new heading near the top using the current V2 format:
+
+   ```markdown
+   ## milvus-sdk-csharp X.Y.Z (YYYY-MM-DD)
+
+   ### Breaking Change
+
+   - ...
+
+   ### Feature
+
+   - ...
+   ```
+
+   Include only sections that have entries. Do not use the legacy bullet format
+   `- YYYY-MM-DD **X.Y.Z**` for a new release: `scripts/extract_changelog.sh` recognizes version
+   headings, not legacy bullet entries.
 3. Keep ordinary feature and bug-fix work out of `CHANGELOG.md` unless the user explicitly asks for
    release preparation or a changelog update.
 4. Derive entries from implementation commits since the preceding release, not only version-bump or
