@@ -42,6 +42,10 @@ Map the user's branch keyword to the actual remote branch ref:
 | `2.6` | `source/2.6` | `source/2.6` | `source/2.6` | `source/2.6` | `source/2.6` |
 | `2.5` | `source/2.5` | `source/2.5` | `source/2.5` | — | `source/2.5` |
 
+Rust `2.5` predates the V2 client surface listed in this map. If a comparison
+targets that line, report that the V2 facade is unavailable instead of trying to
+read the later `src/v2/...` paths from that ref.
+
 Branch model across the V2 SDKs (csharp/java/cpp/rust): absent a dedicated
 major-version branch, the dev line (`master` for java/cpp, `main` for
 csharp/rust) is also the release branch for the newest supported Milvus major —
@@ -54,7 +58,7 @@ line follows the new major. Always verify the actual branch set from Git.
 Fetch pinned with:
 
 ```bash
-git -C <repo> fetch source <branch>:refs/remotes/source/<branch>
+git -C <repo> fetch --force source +refs/heads/<branch>:refs/remotes/source/<branch>
 git -C <repo> rev-parse refs/remotes/source/<branch>
 ```
 
@@ -67,11 +71,11 @@ git -C <repo> rev-parse refs/remotes/source/<branch>
 | Response classes | (dict keys in the return statements) | `sdk-core/src/main/java/io/milvus/v2/service/**/response/*.java` | `src/include/milvus/response/*.h` | `Milvus.Client.V2/Response/**/*Resp.cs` | `src/v2/response/*.rs` |
 | DataType enum | skipped (see Step 8) | `sdk-core/src/main/java/io/milvus/v2/common/DataType.java` | `src/include/milvus/types/DataType.h` | `Milvus.Client.V2/Types/DataType.cs` | `src/v2/types/common.rs` |
 | IndexType enum | skipped (see Step 8) | `sdk-core/src/main/java/io/milvus/param/IndexType.java` | `src/include/milvus/types/IndexType.h` | `Milvus.Client.V2/Types/IndexType.cs` | `src/v2/types/index.rs` |
-| Proto anchor (Step 6) | no vendored `.proto`; use `milvus-io/milvus-proto` or generated `pymilvus/grpc_gen/*.py` | submodule `sdk-core/src/main/milvus-proto` (`proto/milvus.proto`) | fetched by CMake at build: `cmake_build/_deps/milvus_proto-src/proto/milvus.proto` | submodule `Protos` (`proto/milvus.proto`) | submodule `milvus-proto` (`proto/milvus.proto`) |
+| Proto anchor (Step 6) | no vendored `.proto`; use generated `pymilvus/grpc_gen/*.py` descriptors | submodule `sdk-core/src/main/milvus-proto` (`proto/milvus.proto`) | `cmake/MilvusProtoGen.cmake` `PROTO_COMMIT` -> `milvus-io/milvus-proto` | submodule `Protos` (`proto/milvus.proto`) | submodule `milvus-proto` (`proto/milvus.proto`) |
 
 ## Internal mechanisms (Step 7)
 
-Source of truth for auditing the three cross-SDK internal mechanisms. Read the
+Source of truth for auditing the four cross-SDK internal mechanisms. Read the
 listed files pinned to the branch with `git show refs/remotes/source/<branch>:[path]`.
 Line numbers are approximate, taken from the dev-line checkouts; always search
 by symbol, not line, on the pinned branch.
@@ -124,6 +128,29 @@ retry gating in both legacy (49) and current (8) encodings, idempotency-aware
 retry (rust `RetrySemantics`), and schema-mismatch-triggered single retry.
 `retryAsync`/async coverage on the java and pymilvus async paths.
 
+### Client telemetry - metrics, heartbeat, and server-pushed commands
+
+Run `scripts/extract_telemetry.py` for both SDKs, run
+`scripts/compare_telemetry.py` on the two artifacts, then verify every reported
+capability against these pinned source paths. The artifacts are the
+completeness checklist; they are not a semantic parity verdict.
+
+| SDK | Availability / config | Manager and public API | Lifecycle / wire integration |
+|---|---|---|---|
+| pymilvus | No client-side telemetry manager on current dev branches; generated `pymilvus/grpc_gen` code only shows the server contract | unavailable | unavailable; report explicitly instead of treating generated proto types as an SDK feature |
+| java | `sdk-core/src/main/java/io/milvus/telemetry/TelemetryConfig.java` (`enabled=true`, `heartbeatIntervalMs=10_000`, `samplingRate=1.0`, `errorMaxCount=100`, `clientId=""`) | `ClientTelemetryManager.java`; facade `startTelemetry` / `getTelemetry` in `MilvusClientV2.java` | `TelemetryInterceptor.java`, `ClientTelemetryService`, heartbeat/config commands, global-cluster and use-database handoff in `MilvusClientV2.java` / global-cluster tests |
+| cpp | `src/include/milvus/types/TelemetryConfig.h` (`enabled=true`, `heartbeat_interval_ms=10000`, `sampling_rate=1.0`, `error_max_count=100`, empty generated `client_id`) | `src/include/milvus/ClientTelemetry.h` and `src/impl/ClientTelemetry.cpp`; facade inline virtual `GetTelemetry()` in `MilvusClientV2.h` | `ConnectParam::Telemetry`, `MilvusConnection.cpp` handshake/transport rebound, `MilvusClientV2Impl.cpp` connection and close paths, `TelemetryUtils.h` proto conversion |
+| csharp | No client-side telemetry implementation found in `Milvus.Client.V2`; generated `Protos` types do not count as an SDK feature | unavailable | unavailable on current mapped branches |
+| rust | `src/v2/types/common.rs` `TelemetryConfig` (`enabled=true`, 10-second heartbeat, sampling 1.0, 100 errors, empty generated/pinned client ID) | `src/v2/client/telemetry.rs` `ClientTelemetry`; facade `telemetry()` in `src/v2/client.rs` | `ClientTelemetryService`, command handlers/acks, heartbeat task, use-database/username update, transport rebound/global-cluster integration |
+
+Key behaviors to compare: default enablement and opt-out; config fields, units,
+and validation/clamping; stable client IDs; manager accessibility; operation
+latency/error/global/per-collection metrics; heartbeat and stale-window
+semantics; dynamic enable/disable and other server commands; command ack and
+unknown-command behavior; connection/use-database/username/global-cluster/
+transport-rebound handoff; shutdown; and whether telemetry failures affect
+business RPCs.
+
 
 ## Facade method extraction (pinned to the branch)
 
@@ -144,11 +171,12 @@ for node in mod.body:
 '
 ```
 
-java (public `MilvusClientV2` methods):
+java (public `MilvusClientV2` methods; debugging aid only — use
+`scripts/extract_surface.py` for the authoritative surface):
 
 ```bash
 git -C "$HOME/work/git-go/milvus-sdk-java" show source/<branch>:sdk-core/src/main/java/io/milvus/v2/client/MilvusClientV2.java \
-  | grep -nE '^\s*public\s+(static\s+)?[A-Za-z0-9_.$<>,\[\]? ]+[ \t]+[a-zA-Z][a-zA-Z0-9_]*\(' \
+  | grep -nE '^[[:space:]]*public[[:space:]]+(static[[:space:]]+)?[^[:space:]]+[[:space:]]+[A-Za-z_][A-Za-z0-9_]*[[:space:]]*\(' \
   | grep -v 'public class MilvusClientV2' | grep -v 'public MilvusClientV2(' \
   | sed -E 's/^.*[[:space:]]([a-zA-Z][a-zA-Z0-9_]*)\(.*/\1/' | sort -u
 ```
@@ -216,19 +244,26 @@ declaration). A deprecated plain variant that has a covering `*V2` variant is
 legacy-compat, not a deprecation gap (see SKILL.md Step 2).
 
 ## Naming convention mapping
+
+Use `scripts/map_surface.py` to generate mapping candidates. Ordinary
+snake_case/camelCase/PascalCase names map automatically; C# `Async` is a
+language suffix and is removed for matching. Semantic `V2` suffixes (for
+example `grant_privilege_v2`) are preserved. The script also carries the
+documented nontrivial aliases, including:
+
 | pymilvus | java | cpp | csharp | rust |
 |---|---|---|---|---|
-| `create_collection` | `createCollection` | `CreateCollection` | `CreateCollectionAsync` | `create_collection` |
-| `query_iterator` | `queryIterator` | `QueryIterator` | `QueryIteratorAsync` | `query_iterator` |
-| `search_iterator` | `searchIterator` / `searchIteratorV2` | `SearchIterator` | `SearchIteratorAsync` | `search_iterator` |
 | `using_database` / `use_database` | `useDatabase` | `UseDatabase` | `UseDatabaseAsync` | `use_database` |
 | `list_loaded_segments` | `getQuerySegmentInfo` | `ListQuerySegments` | `GetQuerySegmentInfoAsync` | `list_query_segments` |
+| `list_persistent_segments` / `list_segments` | `getPersistentSegmentInfo` | `ListPersistentSegments` | `GetPersistentSegmentInfoAsync` | `list_persistent_segments` |
+| `get_partition_stats` | `getPartitionStats` | `GetPartitionStatistics` | `GetPartitionStatsAsync` | `get_partition_stats` |
+| `close` | `close` | `Disconnect` | `Dispose` | `close` |
 
-When a name differs only by case convention, it is the same interface. When
-java exposes both a plain and a `*V2`/`*Async` variant, treat them as one
-interface unless the surface differs. Prefer `*V2` variants for parity.
-C# exposes a single `*Async` variant per interface (no plain/`*V2` split);
-map it to the baseline name by stripping the `Async` suffix.
+The mapper's candidates are not parity verdicts: read both implementations
+before deciding which candidate covers the baseline. When java exposes both a
+plain and a known covering `*V2` variant, prefer the `*V2` variant for parity;
+do not collapse an unrelated semantic `V2` API (such as
+`grant_privilege_v2`) into its plain variant.
 
 ## Java helper/lifecycle/deprecated exclusions
 

@@ -1,9 +1,10 @@
 # Gap report content format
 
-The exported report `[sdk1]_[sdk2]_[branch]_gaps_<timestamp>.md` must follow
-this structure (`<timestamp>` = `yyyyMMdd` + milliseconds-of-day, appended once
-per run). This format is derived from the existing gap docs (author-machine notes
-under `/home/myh/Videos`; treat the structure here as authoritative):
+The report `[sdk1]_[sdk2]_[branch]_gaps_<timestamp>.md` must follow this
+structure. `report.py` generates the timestamp in UTC as `yyyyMMddHHmmss` plus
+six fractional-second digits and appends a numeric suffix if the path collides.
+This format is derived from the existing gap docs (author-machine notes under
+`/home/myh/Videos`; treat the structure here as authoritative):
 
 - `/home/myh/Videos/java_sdk_lack_30.md`
 - `/home/myh/Videos/cpp_sdk_lack_30.md`
@@ -14,7 +15,7 @@ under `/home/myh/Videos`; treat the structure here as authoritative):
 | Status | Meaning |
 |---|---|
 | Implemented | The audited SDK exposes an equivalent facade or request API with the same core capability. |
-| Partial | The audited SDK has the underlying capability but is missing a baseline input parameter or an observable output value/behavior, or input-validation semantics diverge in either direction (see Input Validation Comparison), or wire-expressiveness diverges - proto member mapping, data encoding, or RPC-issuance short-circuit mismatch (see Wire-expressiveness audit), or an internal mechanism diverges - CollectionTsCache / SchemaCache / Retry behavior mismatch (see Internal Mechanisms Comparison), or deprecation status diverges - the interface is marked deprecated on one side but not the other (bidirectional, see Main gaps and API Comparison). |
+| Partial | The audited SDK has the underlying capability but is missing a baseline input parameter/default/coercion behavior or an observable output value/behavior, or input-validation semantics diverge in either direction (see Input Validation Comparison), or wire-expressiveness diverges - proto member mapping, data encoding, or RPC-issuance short-circuit mismatch (see Wire-expressiveness audit), or an internal mechanism diverges - CollectionTsCache / SchemaCache / Retry / client telemetry behavior mismatch (see Internal Mechanisms Comparison), or deprecation status diverges - the interface is marked deprecated on one side but not the other (bidirectional, see Main gaps and API Comparison). |
 | **Missing** | No equivalent audited-SDK facade/request API was found. |
 | Ignored / excluded | Helper, lifecycle, config, deprecated, or legacy-V1 surface not treated as a parity target. |
 
@@ -41,6 +42,8 @@ under `/home/myh/Videos`; treat the structure here as authoritative):
 - The actionable bar is content/semantic alignment: only missing content,
   mismatched semantics, missing input expressiveness, or missing observable
   output values count as gaps.
+- Default/coercion divergences count as `Partial` when the same unset input
+  resolves to materially different proto values or observable behavior.
 - Input-validation divergences count as `Partial` in both directions: a
   baseline validation rule absent on the audited side (weaker contract), and
   an audited-side validation rule absent from the baseline (stricter contract).
@@ -65,7 +68,8 @@ under `/home/myh/Videos`; treat the structure here as authoritative):
   without issuing the RPC, the other issues the RPC - e.g. empty-data
   `insert`/`upsert`). SDK-derived-only fields with no user mapping are ignored.
 - Internal-mechanism divergences count as `Partial` in both directions (see
-  Internal Mechanisms Comparison): CollectionTsCache, SchemaCache, or Retry
+  Internal Mechanisms Comparison): CollectionTsCache, SchemaCache, Retry, or
+  client telemetry
   behavior the baseline has that the audited side lacks (or vice versa).
   Singleton-vs-per-client scoping and cache-key normalization (empty db ->
   "default", endpoint normalization) are NOT gaps by themselves. Missing
@@ -109,6 +113,9 @@ Scope:
   - what was not counted (inherited helpers, Java helper/lifecycle/deprecated
     set, V1 legacy surface, generated RPCs)
   - parameter and output counting conventions
+  - behavior-artifact scope: facade parameters, request/builder fields and
+    defaults, concrete kwargs, validation-signal entry points, response
+    members/accessors, Python return paths, and nested observable types
   - input-validation comparison in both directions (missing baseline rules and
     extra audited-side rules) and what is excluded (server-side-only checks,
     validation order, error wording)
@@ -117,7 +124,8 @@ Scope:
     what is ignored (members with no user mapping on either side)
   - internal-mechanisms audit scope (CollectionTsCache for
     `ConsistencyLevel.Session`, SchemaCache describe-collection short-circuit,
-    Retry policy incl. RateLimit retry) and what is ignored (singleton-vs-client
+    Retry policy incl. RateLimit retry, and client telemetry) and what is
+    ignored (singleton-vs-client
     scoping, cache-key normalization)
   - deprecated-status comparison in both directions (interface marked
     deprecated on one side but not the other) and what is ignored (audited-side
@@ -146,6 +154,28 @@ Scope:
 Minor behavioral nuances (counted as Implemented, noted for awareness):
 - one bullet per nuance (e.g. None-vs-exception, missing page timestamp).
 
+## Coverage validation
+
+State that `validate_coverage.py` passed and record the baseline/audited surface
+SHA-256 values and method counts. Name any audited-only methods carried as
+`scope=extra` rows and any check marked not applicable with its reason.
+
+```text
+Coverage validation: PASS
+Baseline surface SHA-256: ...
+Audited surface SHA-256: ...
+Baseline behavior SHA-256: ...
+Audited behavior SHA-256: ...
+Baseline telemetry SHA-256: ...
+Audited telemetry SHA-256: ...
+Telemetry comparison SHA-256: ...
+```
+
+The validator must report version 2 and all seven per-method checks (`facade`,
+`parameters`, `defaults`, `outputs`, `validation`, `wire`, `deprecated`) plus
+all four global checks (`collection_ts_cache`, `schema_cache`, `retry`,
+`client_telemetry`).
+
 ## API Comparison
 
 | <SDK1 API> | <SDK2 API> | Status |
@@ -158,6 +188,17 @@ divergence is marked `Partial - deprecated in <sdk> but not in <sdk>`
 (bidirectional). Order the rows by domain
 grouping (session/config, collection/schema, partition, index, DML/DQL,
 database, alias, RBAC, resource group, snapshot, CDC, utility).
+
+## Defaults and Coercion Comparison
+
+| Interface | Input/output value | Baseline default/coercion | Audited default/coercion | Observable effect | Status |
+|---|---|---|---|---|---|
+
+One row for each materially different unset-value resolution, implicit default,
+unit normalization, coercion, truncation, clamping, or empty/null fallback that
+changes an RPC value or an observable result. Equivalent spellings such as
+`10_000`, `10000`, and a ten-second duration are not gaps. Rows must reconcile
+with `Partial` API rows.
 
 ## Input Validation Comparison
 
@@ -196,6 +237,22 @@ Excluded: retry timing/policy. Every row must name the specific member,
 encoding, or short-circuit; rows here reconcile with the `Partial` rows in the
 API Comparison table.
 
+## Client Telemetry Comparison
+
+| Aspect | Baseline | Audited side | Direction | Status |
+|---|---|---|---|---|
+| Availability/default enablement | ... | ... | ... | ... |
+| Configuration fields and defaults | ... | ... | ... | ... |
+| Metrics and heartbeat | ... | ... | ... | ... |
+| Server-pushed commands | ... | ... | ... | ... |
+| Lifecycle and handoff | ... | ... | ... | ... |
+| Failure isolation and privacy | ... | ... | ... | ... |
+
+Use the `extract_telemetry.py` capability map as the minimum checklist, then
+trace every claimed capability to pinned source. Report an explicit
+`**Missing**`/unavailable row for SDKs without a client-side implementation;
+do not omit telemetry merely because it is not in the baseline facade.
+
 ## Internal Mechanisms Comparison
 
 | Mechanism | Aspect | Baseline | Audited side | Direction | Status |
@@ -203,6 +260,7 @@ API Comparison table.
 | CollectionTsCache | ... | ... | ... | ... | ... |
 | SchemaCache | ... | ... | ... | ... | ... |
 | Retry | ... | ... | ... | ... | ... |
+| Client telemetry | ... | ... | ... | ... | ... |
 
 One row per mechanism/aspect divergence found in Step 7, in both directions.
 Every row must name the specific aspect and the observed behavior on each side.
@@ -230,6 +288,9 @@ Covered aspects (see `references/sdk-map.md`):
   `set_retry_param`, csharp `RetryConfig`, per-call
   `retry_times`/`retry_on_rate_limit`), and retry
   application breadth (uniform across DML/DQL/admin vs selective).
+- Client telemetry: default enablement/config, metrics and heartbeat,
+  server-pushed commands, lifecycle handoff, shutdown, and failure isolation;
+  use the Client Telemetry Comparison table for the detailed rows.
 
 Not gaps: singleton-vs-per-client scoping and cache-key normalization (empty db
 -> "default", endpoint normalization). Rows here reconcile with the `Partial`
@@ -257,26 +318,28 @@ members absent, dict keys absent).
 
 Bullets describing deliberate differences (iterator semantics, error-wrapping
 shape, default-consistency default values) that do not count as gaps. Validation
-existence/absence, RPC-issuance short-circuit mismatches, and internal-mechanism
+existence/absence, default/coercion behavior, RPC-issuance short-circuit
+mismatches, and internal-mechanism
 divergences are NOT covered here; they are counted under Input Validation
 Comparison, Wire-expressiveness audit, and Internal Mechanisms Comparison
 respectively.
 
 ## Reproducibility
 
-The exact commands used to regenerate the method lists from the pinned
-branches (use `git -C <repo> show source/<branch>:<path>` plus the extractor
-from `references/sdk-map.md`), the commit hashes, and a note to re-audit each
-pymilvus method's parameters against the audited SDK's request class, its
-output against the audited SDK's response class, and its client-side input
-validation against the audited SDK's request builder/facade checks. For the
-wire-expressiveness audit, record the proto anchor (`milvus-io/milvus-proto`,
-or the java/rust/csharp submodule) and its commit, and note that pymilvus
-vendors no `.proto` files (only `pymilvus/grpc_gen/*.py`). For the
-internal-mechanisms
-audit, list the pinned source files read per SDK for CollectionTsCache,
-SchemaCache, and Retry (from `references/sdk-map.md`), so the mechanism rows
-can be re-verified at the same commits.
+The exact pinned `extract_surface.py`, `map_surface.py`, and
+`extract_behavior.py` commands; surface/behavior SHA-256 values; commit hashes;
+and a note to re-audit each baseline method's parameters and defaults against
+the audited SDK's request class, its output against the audited SDK's response
+class/accessors, and its client-side input validation against the audited SDK's
+request builder/facade checks. For the wire-expressiveness audit,
+record the `resolve_proto.py` command and resulting anchor (submodule gitlink,
+C++ `PROTO_COMMIT`, or pymilvus generated descriptors) and commit; note that
+pymilvus vendors no `.proto` files. Record both `extract_telemetry.py`
+commands/digests, the `compare_telemetry.py` command/digest, and the pinned
+source files read per SDK for
+CollectionTsCache, SchemaCache, Retry, and client telemetry (from
+`references/sdk-map.md`), so the mechanism rows can be re-verified at the same
+commits.
 
 ## Update policy
 
@@ -291,6 +354,10 @@ whenever the pinned branches change.
 - Record both repos' branch and commit hash in `Source files compared` and in
   `Reproducibility`.
 - Every `Partial` row must name the specific missing parameter or output field.
+- Every default/coercion gap must name the baseline and audited resolved
+  values, including units where applicable.
+- Telemetry gaps must name direction and whether the feature is entirely
+  unavailable or present with reduced capability.
 - Do not leave `TODO` placeholders in the exported report; unresolved rows must
   carry the `Partial` status with the observed gap described, or be resolved
   before export.
