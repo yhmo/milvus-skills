@@ -108,6 +108,11 @@ Important:
    Include only sections that have entries. Do not use the legacy bullet format
    `- YYYY-MM-DD **X.Y.Z**` for a new release: `scripts/extract_changelog.sh` recognizes version
    headings, not legacy bullet entries.
+   Do not classify a newly deprecated but still callable API as a breaking change. Put that
+   deprecation under `Improvement` and name the replacement. Classify an item as breaking only
+   when it is removed, renamed without a compatible alias, has an incompatible signature or return
+   type, changes previously valid behavior in a way that requires callers to change code, or uses
+   an obsoletion that is emitted as a compiler error.
 3. Keep ordinary feature and bug-fix work out of `CHANGELOG.md` unless the user explicitly asks for
    release preparation or a changelog update.
 4. Derive entries from implementation commits since the preceding release, not only version-bump or

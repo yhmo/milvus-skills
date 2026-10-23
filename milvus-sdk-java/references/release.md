@@ -48,6 +48,12 @@ For a new release, add a new entry near the top of `CHANGELOG.md` using the repo
 
 Only include sections that have entries.
 
+Do not classify a newly deprecated but still callable method or type as a breaking change. Put that
+deprecation under `Improvement` (or the repository's existing `Deprecated` section when one is
+used) and name the replacement. Classify an item as breaking only when it is removed, renamed
+without a compatible alias, has an incompatible signature or return type, or changes previously
+valid behavior in a way that requires callers to change code.
+
 Use concise user-visible descriptions, not internal implementation details.
 
 ## Version update checklist

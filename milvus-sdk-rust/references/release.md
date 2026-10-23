@@ -197,6 +197,14 @@ repository format:
 Only include sections that have entries. Preserve the blank-line style already used by the Rust
 changelog.
 
+Do not classify a newly deprecated but still callable API or enum variant as a breaking change.
+Put that deprecation under `Improvement` and name the replacement or migration path. For example,
+deprecating `ConsistencyLevel::Customized` while it still encodes and decodes as proto value 4 is
+not a breaking change. Classify an item as breaking only when it is removed, renamed without a
+compatible alias, has an incompatible signature or type, or changes previously valid behavior in a
+way that requires callers to change code. If deprecation is accompanied by such a change, split
+the deprecation notice and the incompatible change into separate entries.
+
 Changelog entries must be concise and user-visible. Include, when applicable:
 
 - breaking API or behavior changes with migration guidance;

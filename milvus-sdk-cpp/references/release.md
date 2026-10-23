@@ -51,6 +51,12 @@ Current sections use:
 Include only sections that have entries. Keep wording concise and user-facing; mention breaking package target changes,
 required Milvus configuration, or compatibility changes explicitly.
 
+Do not classify a newly deprecated but still callable API as a breaking change. Put that
+deprecation under the repository's existing non-breaking section and name the replacement.
+Classify an item as breaking only when it is removed, renamed without a compatible alias, has an
+incompatible signature or return type, or changes previously valid behavior in a way that requires
+callers to change code.
+
 ## Package identity
 
 Current source/package consumption uses:
