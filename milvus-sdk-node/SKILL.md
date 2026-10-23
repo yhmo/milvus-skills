@@ -9,9 +9,19 @@ Use this skill only for `milvus-io/milvus-sdk-node` (npm package `@zilliz/milvus
 
 ## Repository and branch context
 
-- Locate the repository checkout in this order: `$HOME/work/git-go/milvus-sdk-node` when it exists on this machine; a directory named `milvus-sdk-node` among the parent directories of the current working directory; `/home/runner/work/milvus-sdk-node/milvus-sdk-node` (GitHub Actions runner `$GITHUB_WORKSPACE`).
-- Confirm the checkout with `git rev-parse --show-toplevel`, `git remote -v`, `git branch --show-current`, and `git status --short` before relying on it.
-- Upstream is normally `source` (`milvus-io/milvus-sdk-node`); `origin` is usually the user's fork.
+- Resolve the repository with the bundled helper before relying on a path:
+
+  ```bash
+  python3 "$SKILL_DIR/scripts/resolve_repo.py" --sdk node
+  ```
+
+  The helper prefers a matching repository at the current cwd, then checks preset
+  locations (`$HOME/work/git-go`, `$HOME/work`, a cwd child/sibling, and the
+  temporary area). If none is valid, it automatically clones
+  `milvus-io/milvus-sdk-node` to
+  `${TMPDIR:-/tmp}/milvus-skills/milvus-sdk-node` with remote `source`. The automatic clone is depth-1 by default; pass `--full` only when complete history is required. `--branch` accepts a branch or tag; a depth-1 clone can still fetch another known ref later with an explicit refspec. Use the
+  returned `path` and `upstream_remote`; confirm branch, submodule, and worktree
+  state before editing. Pass `--no-clone` when network access must not be used.
 - `main` is the active development line targeting Milvus 3.0; legacy release lines `2.4`, `2.5`, `2.6`, and `v1.x` are maintained separately. Confirm the branch set from Git before assuming API parity with `main`.
 - **Version branch model**: the dev branch (`main`) tracks the newest supported Milvus major release (currently 3.0). Each prior major line keeps a maintenance branch (`2.6` for Milvus 2.6, and older lines like `2.5`/`2.4`). When the SDK advances to a newer Milvus major (3.1/4.0), the dev branch will follow it and a `3.0` branch will be created or frozen to serve Milvus 3.0 users (some other SDKs already carry a `3.0` branch that today tracks their dev line). Always verify the branch-to-Milvus-version mapping from Git rather than assuming a branch name implies a server line.
 - **Branch overlay**: the other references describe the `main` baseline. If `git branch --show-current` returns `2.6`, you MUST read [references/branch-2.6.md](references/branch-2.6.md) before applying any knowledge from the baseline references. On `2.6`, these baseline items do **not** exist:

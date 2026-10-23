@@ -9,9 +9,20 @@ Use this skill only for `milvus-io/milvus-sdk-java`.
 
 ## Repository and branch context
 
-- Locate the repository checkout in this order: `$HOME/work/git-go/milvus-sdk-java` when it exists on this machine; a directory named `milvus-sdk-java` among the parent directories of the current working directory; `/home/runner/work/milvus-sdk-java/milvus-sdk-java` (GitHub Actions runner `$GITHUB_WORKSPACE`).
-- Confirm the checkout with `git rev-parse --show-toplevel`, `git remote -v`, `git branch --show-current`, and `git status --short` before relying on it.
-- Use remote `source` as upstream when it points to `milvus-io/milvus-sdk-java`.
+- Resolve the repository with the bundled helper before relying on a path:
+
+  ```bash
+  python3 "$SKILL_DIR/scripts/resolve_repo.py" --sdk java
+  ```
+
+  The helper prefers a matching repository at the current cwd, then checks preset
+  locations (`$HOME/work/git-go`, `$HOME/work`, a cwd child/sibling, and the
+  temporary area). If none is valid, it automatically clones
+  `milvus-io/milvus-sdk-java` to
+  `${TMPDIR:-/tmp}/milvus-skills/milvus-sdk-java` with remote `source`. The automatic clone is depth-1 by default; pass `--full` only when complete history is required. `--branch` accepts a branch or tag; a depth-1 clone can still fetch another known ref later with an explicit refspec. Use the
+  returned `path` as the repository root, and use the returned `upstream_remote`
+  (normally `source`) for upstream refs. Confirm branch and worktree state before
+  editing. Pass `--no-clone` when network access must not be used.
 - Treat `source/master` as the current design baseline. Treat legacy release branches as maintenance lines whose source layout and supported APIs may differ.
 - **Version branch model**: absent a dedicated major-version branch, `master` is both the development branch and the release branch for the newest supported Milvus major — `x.y.z` releases for that major are cut directly from it. When the SDK advances to a newer major (3.1/4.0), a branch for the current major (e.g. `3.0`) is forked from `master` and `master` follows the new major. Java already carries a `3.0` branch; today it tracks `master` and is used for 3.0-line stabilization, and it will diverge once the dev branch advances to a newer Milvus major (3.1/4.0). Each prior major line keeps a maintenance branch (`2.6` for Milvus 2.6). Always verify the branch-to-Milvus-version mapping from Git rather than assuming a branch name implies a server line.
 - **Branch overlay**: the other references describe the `master`/`3.0` baseline. If `git branch --show-current` returns `2.6`, you MUST read [references/branch-2.6.md](references/branch-2.6.md) before applying any knowledge from the baseline references. On `2.6`, these baseline items do **not** exist:

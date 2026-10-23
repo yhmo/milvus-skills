@@ -1,6 +1,6 @@
 ---
 name: milvus-restful
-description: Analyze and modify the Milvus RESTful (high-level) API service, implemented in `internal/distributed/proxy/httpserver/` inside the `milvus-io/milvus` repository (preferred checkout, typically `$HOME/work/git-go/milvus`). Use for the v1 (`/v1/vector/*`) and v2 (`/v2/vectordb/*`) HTTP endpoints, gin route registration and middleware chains (timeout, DQL admission, restful-size, trace ID, idempotency), JSON request parsing (`request.go`/`request_v2.go`) and the `code`/`message`/`data` response envelope with int64/JSON/Array rendering, request/result conversion in `utils.go`, HTTP configuration (`pkg/util/paramtable/http_param.go`), restful metrics (`pkg/metrics`), the route-to-gRPC mapping (`routeToMethod`), and repository-consistent reviews or fixes. Do not use for the proxy gRPC path (proxy to coordinators), for other components' HTTP handlers, or for client-side REST SDK work (PyMilvus, Node HttpClient, Java HttpClient) unless the server contract is the subject.
+description: Analyze and modify the Milvus RESTful (high-level) API service, implemented in `internal/distributed/proxy/httpserver/` inside the `milvus-io/milvus` repository. Use for the v1 (`/v1/vector/*`) and v2 (`/v2/vectordb/*`) HTTP endpoints, gin route registration and middleware chains, JSON request parsing, the response envelope, request/result conversion, HTTP configuration, REST metrics, route-to-gRPC mapping, branch-aware 2.6 maintenance-line versus 3.0/master-line behavior, and repository-consistent reviews or fixes. Verify the actual Git branch instead of assuming a concrete release version. Do not use for the proxy gRPC path, other components' HTTP handlers, or client-side REST SDK work unless the server contract is the subject.
 ---
 
 # Milvus RESTful API Service
@@ -11,10 +11,27 @@ The Milvus high-level RESTful API is served by the Proxy component as a gin HTTP
 
 ## Start every task
 
-1. Locate the repository checkout in this order: `$HOME/work/git-go/milvus` when it exists on this machine; a directory named `milvus` among the parent directories of the current working directory; `/home/runner/work/milvus/milvus` (GitHub Actions runner `$GITHUB_WORKSPACE`).
-2. Confirm it with `git rev-parse --show-toplevel` and `git remote -v`, and confirm the httpserver package at `$ROOT/internal/distributed/proxy/httpserver`.
+1. Resolve the repository with the bundled helper:
+
+   ```bash
+   python3 "$SKILL_DIR/scripts/resolve_repo.py" --sdk milvus
+   ```
+
+   Pass `--branch <branch>` when the target branch is known (for example
+   `master`, `3.0`, or `2.6`). The helper prefers a matching `milvus-io/milvus`
+   repository at the current cwd, then checks preset locations
+   (`$HOME/work/git-go`, `$HOME/work`, a cwd child/sibling, and the temporary
+   area). If none is valid, it automatically clones the repository to
+   `${TMPDIR:-/tmp}/milvus-skills/milvus` with remote `source`. The automatic
+   clone is depth-1 by default because the Milvus monorepo is large; pass
+   `--full` only when complete history is required. `--branch` accepts a branch
+   or tag; a depth-1 clone can still fetch another known ref later with an
+   explicit refspec. Pass `--no-clone` when network access must not be used.
+2. Use the returned `path` as the Milvus repository root, confirm the returned
+   `upstream_remote`, and confirm the httpserver package at
+   `$ROOT/internal/distributed/proxy/httpserver`.
 3. Check `git branch --show-current`, `git status --short`, and the relevant upstream branch before assuming API behavior.
-- **Version branch model**: `master` is the 3.1 development line; `3.0` is nearly identical to `master` (one test file); `2.6` is the current released maintenance line and diverges significantly (no snapshot/file-resource/external-collection/struct-field handlers or endpoints; `handler_v2.go` and `request_v2.go` differ by thousands of lines). See [references/branch-differences.md](references/branch-differences.md).
+- **Version branch model**: `master` is the development line for the newest Milvus major; the `3.0` branch is nearly identical to `master` (one test file); `2.6` is the maintenance line and diverges significantly (no snapshot/file-resource/external-collection/struct-field handlers or endpoints; `handler_v2.go` and `request_v2.go` differ by thousands of lines). Do not infer a concrete release version from a branch name; verify branches and tags from Git. See [references/branch-differences.md](references/branch-differences.md).
 - **Branch overlay**: the other references describe the `master` baseline. If `git branch --show-current` returns `2.6`, you MUST read [references/branch-differences.md](references/branch-differences.md) before applying any knowledge from the baseline references. On `2.6`, these baseline items do **not** exist:
   `file_resource_handler_v2.go` · `snapshot_handler_v2.go` ·
   snapshot / external-collection / file-resource / struct-field endpoints ·
@@ -70,9 +87,10 @@ For architecture or implementation work, normally read both `technical-details.m
 
 - v1 (`HandlersV1`, `/v1/vector/*`) is legacy and slated for deprecation; new work goes to v2 (`HandlersV2`, `/v2/vectordb/*`).
   Keep v1 behavior stable unless the task explicitly deprecates an endpoint.
-- The v2 surface is the contract documented at https://milvus.io/api-reference/restful/v3.0.x/ (and v2.6.x/v2.5.x for
-  maintenance branches). Changing a route, a request field, or a response field is a breaking change; verify the
-  maintenance-branch behavior from source on the matching `2.x` branch, not from `master`.
+- The v2 surface is a documented public contract. Changing a route, request field, or response field is a breaking
+  change; verify the behavior from source on the matching maintenance branch (`2.6`) or current line (`3.0`/`master`),
+  not from `master` alone. Use the Milvus REST API reference for the target line rather than assuming a concrete
+  release version.
 - Do not hand-edit generated files. The httpserver package imports `milvus-proto/go-api/v3` protos and internal
   `milvus/pkg/v3` protos; proto changes are made upstream and regenerated.
 
@@ -96,6 +114,7 @@ the directory that directly contains both `SKILL.md` and `scripts/` — as expos
 (or locate it yourself); never hardcode a `.opencode` or other agent-specific prefix.
 
 ```bash
+"$SKILL_DIR/scripts/resolve_repo.py" --sdk milvus
 "$SKILL_DIR/scripts/api-trace.sh" search
 "$SKILL_DIR/scripts/validate-skill.sh"
 ```

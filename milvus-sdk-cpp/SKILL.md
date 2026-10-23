@@ -10,11 +10,22 @@ language SDK except when comparing behavior.
 
 ## Start every task
 
-1. Locate the repository checkout in this order: `$HOME/work/git-go/milvus-sdk-cpp` when it exists on this machine; a directory named `milvus-sdk-cpp` among the parent directories of the current working directory; `/home/runner/work/milvus-sdk-cpp/milvus-sdk-cpp` (GitHub Actions runner `$GITHUB_WORKSPACE`).
-2. Confirm it with `git rev-parse --show-toplevel` and `git remote -v`.
-3. Check `git branch --show-current`, `git status --short`, and the relevant upstream branch before assuming API parity.
-4. Preserve unrelated user changes. Use `apply_patch` for edits.
-5. Search with `rg` or run `scripts/api-trace.sh`; do not infer an API path from filenames alone.
+1. Resolve the repository with the bundled helper:
+
+   ```bash
+   python3 "$SKILL_DIR/scripts/resolve_repo.py" --sdk cpp
+   ```
+
+   It prefers a matching repository at the current cwd, then checks preset
+   locations (`$HOME/work/git-go`, `$HOME/work`, a cwd child/sibling, and the
+   temporary area). If none is valid, it automatically clones
+   `milvus-io/milvus-sdk-cpp` to
+   `${TMPDIR:-/tmp}/milvus-skills/milvus-sdk-cpp` with remote `source`. The automatic clone is depth-1 by default; pass `--full` only when complete history is required. `--branch` accepts a branch or tag; a depth-1 clone can still fetch another known ref later with an explicit refspec. Use the
+   returned `path` and `upstream_remote`; pass `--no-clone` when network access
+   must not be used.
+2. Check `git branch --show-current`, `git status --short`, and the relevant upstream branch before assuming API parity.
+3. Preserve unrelated user changes. Use `apply_patch` for edits.
+4. Search with `rg` or run `scripts/api-trace.sh`; do not infer an API path from filenames alone.
 
 ## Load the relevant reference
 

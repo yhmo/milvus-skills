@@ -11,12 +11,26 @@ language SDK or for server-side `internal/` packages.
 
 ## Start every task
 
-1. Locate the repository checkout in this order: `$HOME/work/git-go/milvus` when it exists on this machine; a directory named `milvus` among the parent directories of the current working directory; `/home/runner/work/milvus/milvus` (GitHub Actions runner `$GITHUB_WORKSPACE`).
-2. Confirm it with `git rev-parse --show-toplevel` and `git remote -v`.
-3. Confirm the Go SDK root at `$ROOT/client` and that `client/go.mod` declares module `github.com/milvus-io/milvus/client/v3`.
-4. Check `git branch --show-current`, `git status --short`, and the relevant upstream branch before assuming API parity.
-5. Preserve unrelated user changes. Use focused edits; never hand-edit generated files (see Repository rules).
-6. Search with `rg`, or run `scripts/api-trace.sh`; do not infer an API path from filenames alone.
+1. Resolve the repository with the bundled helper:
+
+   ```bash
+   python3 "$SKILL_DIR/scripts/resolve_repo.py" --sdk go
+   ```
+
+   It prefers a matching `milvus-io/milvus` repository at the current cwd, then
+   checks preset locations (`$HOME/work/git-go`, `$HOME/work`, a cwd
+   child/sibling, and the temporary area). If none is valid, it automatically
+   clones the repository to `${TMPDIR:-/tmp}/milvus-skills/milvus` with remote
+   `source`. The automatic clone is depth-1 by default; pass `--full` only when
+   complete history is required. `--branch` accepts a branch or tag; a depth-1
+   clone can still fetch another known ref later with an explicit refspec. Use
+   the returned `path` and `upstream_remote`;
+   pass `--no-clone`
+   when network access must not be used.
+2. Confirm the Go SDK root at `$ROOT/client` and that `client/go.mod` declares module `github.com/milvus-io/milvus/client/v3`.
+3. Check `git branch --show-current`, `git status --short`, and the relevant upstream branch before assuming API parity.
+4. Preserve unrelated user changes. Use focused edits; never hand-edit generated files (see Repository rules).
+5. Search with `rg`, or run `scripts/api-trace.sh`; do not infer an API path from filenames alone.
 
 ## Load the relevant reference
 

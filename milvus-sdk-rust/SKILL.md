@@ -9,8 +9,19 @@ Maintain deprecated V1 compatibility and active V2 development as separate API s
 
 ## Repository and references
 
-- Locate the repository checkout in this order: `$HOME/work/git-go/milvus-sdk-rust` when it exists on this machine; a directory named `milvus-sdk-rust` among the parent directories of the current working directory; `/home/runner/work/milvus-sdk-rust/milvus-sdk-rust` (GitHub Actions runner `$GITHUB_WORKSPACE`).
-- Confirm the root and remotes with `git rev-parse --show-toplevel` and `git remote -v` before relying on a checkout. Upstream is normally `source`.
+- Resolve the repository with the bundled helper before relying on a path:
+
+  ```bash
+  python3 "$SKILL_DIR/scripts/resolve_repo.py" --sdk rust
+  ```
+
+  The helper prefers a matching repository at the current cwd, then checks preset
+  locations (`$HOME/work/git-go`, `$HOME/work`, a cwd child/sibling, and the
+  temporary area). If none is valid, it automatically clones
+  `milvus-io/milvus-sdk-rust` to
+  `${TMPDIR:-/tmp}/milvus-skills/milvus-sdk-rust` with remote `source`. The automatic clone is depth-1 by default; pass `--full` only when complete history is required. `--branch` accepts a branch or tag; a depth-1 clone can still fetch another known ref later with an explicit refspec. Use the
+  returned `path` and `upstream_remote`; confirm branch, submodule, and worktree
+  state before editing. Pass `--no-clone` when network access must not be used.
 - When committing, use `git commit -sm '<message>'` so the committer's email address is recorded; every commit in this repository must carry a Signed-off-by trailer.
 - When creating a pull request, ensure each PR contains exactly one commit.
 - Read only the relevant one-level reference before acting:

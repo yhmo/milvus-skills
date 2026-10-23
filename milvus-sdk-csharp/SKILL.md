@@ -9,9 +9,19 @@ Use this skill only for `milvus-io/milvus-sdk-csharp`.
 
 ## Repository and branch context
 
-- Locate the repository checkout in this order: `$HOME/work/git-go/milvus-sdk-csharp` when it exists on this machine; a directory named `milvus-sdk-csharp` among the parent directories of the current working directory; `/home/runner/work/milvus-sdk-csharp/milvus-sdk-csharp` (GitHub Actions runner `$GITHUB_WORKSPACE`).
-- Confirm the checkout with `git rev-parse --show-toplevel`, `git remote -v`, `git branch --show-current`, and `git status --short` before relying on it.
-- Upstream is normally `source` (`milvus-io/milvus-sdk-csharp`); `origin` is usually the user's fork.
+- Resolve the repository with the bundled helper before relying on a path:
+
+  ```bash
+  python3 "$SKILL_DIR/scripts/resolve_repo.py" --sdk csharp
+  ```
+
+  The helper prefers a matching repository at the current cwd, then checks preset
+  locations (`$HOME/work/git-go`, `$HOME/work`, a cwd child/sibling, and the
+  temporary area). If none is valid, it automatically clones
+  `milvus-io/milvus-sdk-csharp` to
+  `${TMPDIR:-/tmp}/milvus-skills/milvus-sdk-csharp` with remote `source`. The automatic clone is depth-1 by default; pass `--full` only when complete history is required. `--branch` accepts a branch or tag; a depth-1 clone can still fetch another known ref later with an explicit refspec. Use the
+  returned `path` and `upstream_remote`; confirm branch and worktree state before
+  editing. Pass `--no-clone` when network access must not be used.
 - The active development line is `main`, which carries the V2 SDK (`Milvus.Client.V2`, DTO request/response API aligned with the Java/C++/Rust V2 SDKs). Legacy V1 (`Milvus.Client`) is retained in maintenance mode. Confirm the current branch set from Git before assuming API parity.
 - **Version branch model**: `main` is the 3.0 feature-development line — RLS, snapshot, file-resource, and external-collection APIs are implemented there but not yet released. `2.6` is the current released line; confirm the latest release with `git ls-remote --tags source`. `2.2` and `release/2.3` are legacy V1 lines, and `develop` remains from earlier work. Always verify the actual branch-to-Milvus-version mapping from Git rather than assuming a branch name implies a server line.
 - **Branch overlay**: the other references describe the `main` baseline. If `git branch --show-current` returns `2.6`, you MUST read [references/branch-2.6.md](references/branch-2.6.md) before applying any knowledge from the baseline references. On `2.6`, these baseline items do **not** exist:

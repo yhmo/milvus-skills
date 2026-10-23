@@ -1,8 +1,9 @@
 # API Surface and Wire Contract
 
 Catalog of the RESTful endpoints and their wire behavior, verified against `constant.go`, `handler_v2.go`
-(`RegisterRoutesToV2` and `routeToMethod`), `handler_v1.go`, and `handler.go`. Documentation mirror:
-https://milvus.io/api-reference/restful/v3.0.x/ (v2) and v2.6.x/v2.5.x for maintenance branches.
+(`RegisterRoutesToV2` and `routeToMethod`), `handler_v1.go`, and `handler.go`. Cross-check public contract changes
+against the Milvus REST API reference for the target line (`3.0`/`master` or `2.6`); do not assume a concrete release
+version.
 
 ## Base URLs
 

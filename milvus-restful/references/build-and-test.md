@@ -55,6 +55,6 @@ golangci-lint run ./internal/distributed/proxy/httpserver/...
 
 ## Docs cross-check
 
-- The v2 wire contract is documented at https://milvus.io/api-reference/restful/v3.0.x/ (and v2.6.x/v2.5.x for the
-  matching maintenance branches). If a change alters a documented request field, response field, or route, update the
-  server code and flag the doc parity.
+- The v2 wire contract is documented in the Milvus REST API reference for the matching line (`3.0`/`master` or `2.6`).
+  If a change alters a documented request field, response field, or route, update the server code and flag the doc
+  parity. Do not assume a concrete release version.

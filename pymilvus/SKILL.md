@@ -10,11 +10,19 @@ Repo-specific workflows for the Milvus Python SDK. This is not a general Python 
 ## Repository
 
 - This skill is for the `milvus-io/pymilvus` repository.
-- Locate the repository checkout in this order:
-  1. `$HOME/work/git-go/pymilvus` when it exists on this machine;
-  2. a directory named `pymilvus` among the parent directories of the current working directory;
-  3. `/home/runner/work/pymilvus/pymilvus` (GitHub Actions runner `$GITHUB_WORKSPACE`).
-- Confirm the checkout with `git rev-parse --show-toplevel` and `git remote -v` before relying on it. Do not assume the preferred path exists or is the correct repository without verification.
+- Resolve the repository with the bundled helper before relying on a path:
+
+  ```bash
+  python3 "$SKILL_DIR/scripts/resolve_repo.py" --sdk pymilvus
+  ```
+
+  The helper prefers a matching repository at the current cwd, then checks preset
+  locations (`$HOME/work/git-go`, `$HOME/work`, a cwd child/sibling, and the
+  temporary area). If none is valid, it automatically clones
+  `milvus-io/pymilvus` to `${TMPDIR:-/tmp}/milvus-skills/pymilvus` with remote
+  `source`. The automatic clone is depth-1 by default; pass `--full` only when complete history is required. `--branch` accepts a branch or tag; a depth-1 clone can still fetch another known ref later with an explicit refspec. Use the returned `path` as the repository root; then run
+  `git remote -v`, `git branch --show-current`, and `git status --short` before
+  editing. Pass `--no-clone` when network access must not be used.
 - **Version branch model**: `master` is the dev branch and tracks the newest supported Milvus major release (currently 3.0). Each prior major line keeps a maintenance branch (`2.6` for Milvus 2.6, plus older `2.x` lines). PyMilvus already carries a `3.0` branch; today it tracks `master` and is used for 3.0-line stabilization, and it will diverge once the dev branch advances to a newer Milvus major (3.1/4.0). Always verify the branch-to-Milvus-version mapping from Git rather than assuming a branch name implies a server line.
 - **Branch overlay**: the other references describe the `master`/`3.0` baseline. If `git branch --show-current` returns `2.6`, you MUST read [references/branch-2.6.md](references/branch-2.6.md) before applying any knowledge from the baseline references. On `2.6`, these baseline items do **not** exist:
   `pymilvus/function_chain/` · `client/bloom_filter.py` · `client/roaring_filter.py` · `client/search_aggregation.py` ·

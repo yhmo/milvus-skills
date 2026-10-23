@@ -47,13 +47,26 @@ Input shape is like: `compare-sdk [sdk1] sdk with [sdk2] for [branch] branch`.
 
 For each of the two SDKs:
 
-1. Resolve the repo root: if the cwd is already inside the SDK repo, use it;
-   otherwise use the preferred checkout `$HOME/work/git-go/[repo]` when present on this machine. Verify with
-   `git rev-parse --show-toplevel` and `git remote -v`. Do not assume the path
-   exists; if it does not, report and ask before cloning.
-2. Confirm the upstream remote `source` points to `milvus-io/[repo]`.
-3. Map the user's branch keyword to the SDK's actual remote branch per
+1. Map the user's branch keyword to the SDK's actual remote branch per
    `references/sdk-map.md` (e.g. rust `master` maps to `source/main`).
+2. Resolve the repository with the bundled helper:
+
+   ```bash
+   python3 "$SKILL_DIR/scripts/resolve_repo.py" \
+     --sdk <sdk> --branch <actual-branch>
+   ```
+
+   The helper prefers a matching repository at the current cwd, then checks
+   preset locations (`$HOME/work/git-go`, `$HOME/work`, a cwd child/sibling,
+   and the temporary area). If none is valid, it automatically clones the SDK
+   repository to `${TMPDIR:-/tmp}/milvus-skills/[repo]` with remote `source`.
+   The automatic clone is depth-1 by default; pass `--full` only when complete
+   history is required. `--branch` accepts a branch or tag; a depth-1 clone can
+   still fetch another known ref later with an explicit refspec. Use the
+   returned `path` and `upstream_remote`; pass `--no-clone` only when network
+   access is explicitly unavailable.
+3. Confirm the upstream remote points to `milvus-io/[repo]`; normally it is
+   named `source`.
 4. Fetch the branch pinned with a forced refspec:
    `git fetch --force source +refs/heads/[branch]:refs/remotes/source/[branch]`.
    If the name is wrong, run `git fetch source --prune`, then `git ls-remote
@@ -599,6 +612,9 @@ Mechanism 4 - Client telemetry:
 
 ## Bundled Scripts
 
+- `scripts/resolve_repo.py`: prefer a matching SDK repository at the current
+  cwd, discover preset checkouts, or clone the missing repository into the
+  temporary area with an upstream `source` remote.
 - `scripts/extract_surface.py`: extract a deterministic facade-method surface
   from a pinned SDK ref, including overload, async/static, source location,
   parameter, return/request/response, and deprecation metadata.
