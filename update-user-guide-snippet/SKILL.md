@@ -198,7 +198,19 @@ Updating a document WITHOUT the corresponding SDK skill risks API deviations
   5. By default process only documents that **already contain code blocks**
      (probe with `docs +fetch --scope outline`; empty outlines or
      outline-less documents with no `<pre>` are skipped and reported). Do NOT
-     create code in empty documents unless the user explicitly asks.
+    create code in empty documents unless the user explicitly asks.
+
+     > **⚠️ Baseline guard (hard rule — no exceptions).** Before adding ANY
+     > block to a section, verify that a `Python`/pymilvus block already
+     > exists in that section. If no pymilvus baseline block exists — regardless
+     > of whether the user prompt asks to add blocks ("补齐遗漏的 java 代码块",
+     > "add missing Java blocks", …) — skip the section and report it as
+     > `no pymilvus baseline, cannot add`. The "unless the user explicitly
+     > asks" escape of this empty-document rule does NOT override this guard:
+     > an imperative prompt is never an acceptable substitute for a missing
+     > baseline. Generating code from topic knowledge instead of translating a
+     > baseline produces hallucinated snippets that do not match the document
+     > and is a violation.
   - "only the collections docs", "just the Search page", etc. narrow the scope
     by title/ID as named by the user. When the user names a page by its position
     in the table they shared ("第 3 个页面" / "the 3rd page"), resolve it from
@@ -349,6 +361,13 @@ Updating a document WITHOUT the corresponding SDK skill risks API deviations
    - **Standalone `<pre>` blocks** (not wrapped in `<synced-source>`, as in
      FAQ pages) are single-language answers — fix their errors only, do NOT add
      other languages (see Scope).
+   - **Baseline guard (apply before ANY addition).** For every section where
+      you intend to add a block, first confirm a `Python`/pymilvus `<pre>`
+      block exists in that same section. If it does not, skip the addition and
+      report `no pymilvus baseline, cannot add` for that section — no matter
+      how the user prompt is phrased (see the Baseline guard in Scope). Only
+      after the baseline is verified may you proceed to the Missing SDKs rule
+      below.
    - **Missing SDKs** → for a `<synced-source>` section, add the missing
       language's block using the pymilvus block as the logic baseline,
       translated per the conventions in
