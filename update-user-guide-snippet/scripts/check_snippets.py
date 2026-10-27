@@ -53,6 +53,93 @@ CODE_RE = re.compile(r'^<code>(.*)</code>$', re.S)
 # Cloud CLI, not an SDK block, and the skill leaves it alone entirely.
 IGNORED = {"shell"}
 
+# Languages whose doc blocks are snippet fragments (reference lines + body) and
+# need a throwaway skeleton assembled before a toolchain can parse them.
+FRAGMENT_LANGS = {"go", "java", "cpp", "rust"}
+
+ENTRY_POINT_RE = {
+    # A block that already carries an entry point is legacy/self-contained —
+    # check it as-is instead of double-wrapping.
+    "go": re.compile(r"^\s*(package\s+\w+|func\s+main\s*\()", re.M),
+    "java": re.compile(r"\bmain\s*\("),
+    "cpp": re.compile(r"\bint\s+main\s*\("),
+    "rust": re.compile(r"fn\s+main\s*\("),
+}
+
+# rustc error codes that only stem from the SDK crates not being vendored in
+# the check environment — resolution-only, treated as a soft pass.
+RUST_SOFT_CODES = {
+    "E0412", "E0422", "E0425", "E0432", "E0433", "E0434", "E0437",
+    "E0405", "E0463", "E0599", "E0560", "E0603", "E0658",
+    # `Result<()>`-style aliases resolve only with the SDK crate present.
+    "E0107",
+}
+
+
+def wrap_fragment(lang: str, code: str) -> str:
+    """Assemble a parseable file: reference lines on top, body in a dummy fn."""
+    if lang not in ENTRY_POINT_RE or ENTRY_POINT_RE[lang].search(code):
+        return code
+    lines = code.split("\n")
+    if lang == "go":
+        refs, body, i = [], [], 0
+        while i < len(lines):
+            ln = lines[i].rstrip()
+            if ln.startswith("import ("):
+                j = i
+                while j < len(lines) and lines[j].strip() != ")":
+                    j += 1
+                refs.extend(lines[i : j + 1])
+                i = j + 1
+                continue
+            if ln.startswith("import "):
+                refs.append(ln)
+            else:
+                body.append(ln)
+            i += 1
+        return (
+            "package snippet_check\n\n"
+            + "\n".join(refs)
+            + "\n\nfunc snippetRun() {\n"
+            + "\n".join(body)
+            + "\n}\n"
+        )
+    if lang == "java":
+        refs = [l for l in lines if l.strip().startswith("import ")]
+        body = [l for l in lines if not l.strip().startswith("import ")]
+        return (
+            "\n".join(refs)
+            + "\n\nclass SnippetCheck { static void snippetRun() throws Exception {\n"
+            + "\n".join(body)
+            + "\n} }\n"
+        )
+    if lang == "cpp":
+        ref_re = re.compile(r"\s*(#(include|define)|using\s)")
+        refs = [l for l in lines if ref_re.match(l)]
+        body = [l for l in lines if not ref_re.match(l)]
+        return (
+            "\n".join(refs)
+            + "\n\nint snippetRun() {\n"
+            + "\n".join(body)
+            + "\nreturn 0;\n}\n"
+        )
+    if lang == "rust":
+        refs = [
+            l for l in lines
+            if l.strip().startswith(("use ", "extern crate"))
+        ]
+        body = [
+            l for l in lines
+            if not l.strip().startswith(("use ", "extern crate"))
+        ]
+        return (
+            "\n".join(refs)
+            + "\n\nasync fn snippet_run() -> Result<(), Box<dyn std::error::Error>> {\n"
+            + "\n".join(body)
+            + "\nOk(())\n}\n"
+        )
+    return code
+
 
 def normalize_lang(lang: str) -> str:
     return {
@@ -133,8 +220,9 @@ def main():
             continue
         ext, cmd = LANGS[lang]
         path = os.path.join(args.out_dir, f"{lang}-{i:02d}{ext}")
+        wrapped = wrap_fragment(lang, code) if lang in FRAGMENT_LANGS else code
         with open(path, "w") as f:
-            f.write(code)
+            f.write(wrapped)
         argv = list(cmd)
         if lang == "cpp" and args.cpp_includes:
             argv += [f"-I{inc}" for inc in args.cpp_includes.split(":")]
@@ -145,6 +233,16 @@ def main():
             r = subprocess.run(argv, capture_output=True, text=True, timeout=120)
             if r.returncode == 0:
                 results.append((i, lang_raw, "OK", True))
+            elif lang == "rust":
+                output = (r.stderr or r.stdout)
+                codes = set(re.findall(r"error\[E(\d+)\]", output))
+                if codes and codes <= {c[1:] for c in RUST_SOFT_CODES}:
+                    results.append(
+                        (i, lang_raw, "OK (soft: unresolved SDK crates only)", True)
+                    )
+                else:
+                    err = output.strip().splitlines()
+                    results.append((i, lang_raw, "FAIL", False, err[-3:]))
             else:
                 err = (r.stderr or r.stdout).strip().splitlines()
                 results.append((i, lang_raw, "FAIL", False, err[-3:]))

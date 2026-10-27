@@ -2,7 +2,10 @@
 """Run the rust snippets of a user-guide page against a live Milvus server.
 
 Extracts every ```rust block, hoists `use` statements, and wraps the block
-bodies inside a main() in a cargo project depending on milvus-sdk-rust.
+bodies inside its own main() in a cargo project depending on milvus-sdk-rust.
+Doc blocks are snippet fragments (reference lines + body) per the skill's
+fragment rule; legacy blocks that still carry the `#[tokio::main] async fn
+main()` wrapper are tolerated (the wrapper is stripped before assembly).
 Compiles and runs with `cargo run`.
 
 Note: the user guide currently has no rust snippets; this runner is prepared
@@ -93,6 +96,23 @@ def main():
                 continue
             kept.append(line)
         bodies.append("\n".join(kept))
+
+    # tolerate legacy blocks that still carry the entry-point wrapper
+    unwrapped = []
+    for b in bodies:
+        if re.search(r"async\s+fn\s+main\s*\(", b):
+            lines = [l for l in b.split("\n")
+                     if not re.match(r"\s*#\s*\[\s*tokio::main\s*\]", l)]
+            lines = [l for l in lines
+                     if not re.search(r"async\s+fn\s+main\s*\(", l)]
+            while lines and not lines[-1].strip():
+                lines.pop()
+            if lines and lines[-1].strip() == "}":
+                lines.pop()
+            b = "\n".join(lines)
+        unwrapped.append(b)
+    bodies = unwrapped
+
     uses = list(dict.fromkeys(uses))
     default = "use milvus::v2::prelude::*;"
     if default not in uses:

@@ -36,6 +36,20 @@ Snippets are stored as `<pre lang="..."><code>...</code></pre>` blocks inside
 - Never wrap a replaced block in `<synced-source>` — the container already
   exists.
 
+## Fragment rule (every language)
+
+A doc code block is a **snippet fragment**: reference lines (`import` /
+`#include` / `use` / `using`) plus the logic body. NEVER write an entry-point
+wrapper into a doc block in ANY language — no `package main` + `func main()`
+(Go), no `#[tokio::main]` + `async fn main()` (Rust), no `int main()` (C++),
+no `main`-bearing class (Java).
+
+"Self-contained, independently runnable" is verified by ASSEMBLING an
+executable: put the block's reference lines before `main` and the block's
+logic body inside `main`, then build and run. The assembly is the test
+harness's job — the doc block itself must stay a fragment, so readers see the
+logic without boilerplate and can paste the body into their own program.
+
 ## pymilvus — `python` (reference baseline)
 
 - Client init:
@@ -181,20 +195,19 @@ cli, err := milvusclient.New(ctx, &milvusclient.ClientConfig{
 
 ## milvus-sdk-rust — `rust`
 
-- Init (async, needs `#[tokio::main]`):
+- Init (fragment — the test harness supplies `#[tokio::main] async fn main()`;
+  never write the wrapper into the doc block):
 
   ```rust
   use milvus::v2::prelude::*;
 
-  #[tokio::main]
-  async fn main() -> Result<()> {
-      let config = ConnectConfig::new().uri("http://localhost:19530").token("root:Milvus");
-      let client = ClientV2::new(&config).await?;
-      // ...
-      Ok(())
-  }
+  let config = ConnectConfig::new().uri("http://localhost:19530").token("root:Milvus");
+  let client = ClientV2::new(&config).await?;
   ```
 
+- `.await` and `?` are legal inside a doc block even though a standalone file
+  would not compile: the harness embeds the body in an async fn returning
+  `Result`, which is what makes the fragment testable.
 - Operations are async: `client.create_database(CreateDatabaseRequest::builder()...build()?).await?;`.
   Verify method/type names against `milvus-sdk-rust` v3.0.x (`src/v2/`, see
   `sdk-map.md`).

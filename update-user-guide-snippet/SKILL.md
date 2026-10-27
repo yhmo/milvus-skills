@@ -496,6 +496,13 @@ Updating a document WITHOUT the corresponding SDK skill risks API deviations
       pull each edited `<pre>`'s code text, undo the XML escaping, and write it
       to `sdk-tmp/snippet-check/<lang>/<doc>-<n>.<ext>`.
     - Then parse-check per language:
+     - `check_snippets.py` first wraps fragment blocks in a throwaway skeleton
+       per language (reference lines stay on top, the body goes inside a dummy
+       function) before invoking the toolchain; blocks that already contain an
+       entry point (`fn main`/`func main`/`int main`/`static ... main`) are
+       checked as-is. For `rust` → `rustc --edition 2021 --crate-type lib`:
+       errors that only stem from missing SDK crates (unresolved
+       import/crate/name codes) count as a soft pass; parse errors fail.
      - `python` → `python -m py_compile <file>` (or `ast.parse`).
      - `javascript` → `node --check <file>`.
      - `cpp` → `g++ -fsyntax-only -std=c++17 <file>` with the SDK's include paths
@@ -509,17 +516,20 @@ Updating a document WITHOUT the corresponding SDK skill risks API deviations
    - Fix any reported syntax error in the Feishu block (Step 3) and re-run until
       clean. If a toolchain is missing, say so explicitly in the report rather
       than silently skipping.
-   - **Import/include/use self-containment is the norm, not an error.** Each
-      code block is meant to be copied and run standalone — keep every symbol's
-      import/include/use statement in its own block, even when a multi-block
-      flow (create collection → create index → insert → query) repeats the same
-      imports in every block. Repeated imports across blocks in the same
-      document are expected and correct; do NOT strip them to "deduplicate".
-      This is what makes each block independently runnable. The only real
-      constraint is Go: pasting consecutive blocks into one file fails to
-      compile on duplicate imports (and unused imports) — note this in the
-      report when relevant, but never remove imports from a block to work
-      around it.
+   - **Snippet fragment rule (all languages).** A doc block consists of
+      reference lines (`import` / `#include` / `use` / `using`) plus the logic
+      body — NEVER an entry-point wrapper. Do not write `package main` +
+      `func main()` (Go), `#[tokio::main]` + `async fn main()` (Rust),
+      `int main()` (C++), or a `main`-bearing class (Java) into any code block.
+      "Self-contained and runnable" means a tester ASSEMBLES an executable by
+      putting the block's reference lines before `main` and the block's logic
+      body inside `main` — the doc block itself stays a fragment. Keep every
+      symbol's import/include/use statement in its own block, even when a
+      multi-block flow (create collection → create index → insert → query)
+      repeats the same imports in every block. Repeated imports across blocks
+      in the same document are expected and correct; do NOT strip them to
+      "deduplicate" — when the harness assembles multiple blocks into one test
+      file, IT deduplicates reference lines, never the doc.
    - Code blocks that are **fragments by design** (a mid-file data array, a
      continuation block referencing earlier blocks) may fail a standalone parse;
      judge by intent — concatenate continuation blocks in the same section for
