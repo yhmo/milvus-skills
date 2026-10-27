@@ -10,17 +10,34 @@ or a client SDK except when comparing behavior.
 
 ## Start every task
 
-1. Locate the repository checkout in this order: `$HOME/work/git-go/milvus-storage` when it exists on this machine; a directory named `milvus-storage` among the parent directories of the current working directory; `/home/runner/work/milvus-storage/milvus-storage` (GitHub Actions runner `$GITHUB_WORKSPACE`).
-2. Confirm it with `git rev-parse --show-toplevel` and `git remote -v`. `source` is the upstream `milvus-io/milvus-storage`
-   remote; `origin` is usually the user's fork.
-3. Check `git branch --show-current`, `git status --short`, and the relevant upstream branch before assuming behavior.
-4. Read repository-level `AGENTS.md` files if present; preserve unrelated user changes.
-5. Classify the request as explanation, diagnosis, targeted change, cross-component change, or generation before acting.
+1. Resolve the repository with the bundled helper before relying on a path:
+
+  ```bash
+  python3 "$SKILL_DIR/scripts/resolve_repo.py"
+  ```
+
+  The helper prefers a matching repository at the current cwd, then checks preset
+  locations (`$HOME/work/git-go`, `$HOME/work`, a cwd child/sibling, and the
+  temporary area). If none is valid, it automatically clones
+  `milvus-io/milvus-storage` to
+  `${TMPDIR:-/tmp}/milvus-skills/milvus-storage` with remote `source`. The automatic
+  clone is depth-1 by default; pass `--full` only when complete history is
+  required. `--branch` accepts a branch or tag and guarantees the returned checkout is on
+  that ref: a fresh clone checks the ref out directly, and an existing checkout
+  is fetched (depth 1) and switched automatically — no manual fetch/checkout
+  step. Switching is refused while the worktree is dirty; commit, stash, or
+  clean first. Use the returned `path`, `upstream_remote`, `ref_type`, and
+  `ref_action`; pass `--no-clone` when network access must not be used.
+  Confirm the returned checkout with `git rev-parse --show-toplevel` and
+  `git remote -v` before relying on it. `source` is the upstream `milvus-io/milvus-storage` remote; `origin` is usually the user's fork.
+2. Check `git branch --show-current`, `git status --short`, and the relevant upstream branch before assuming behavior.
+3. Read repository-level `AGENTS.md` files if present; preserve unrelated user changes.
+4. Classify the request as explanation, diagnosis, targeted change, cross-component change, or generation before acting.
    Do not implement a fix for a diagnosis-only request.
-6. Search with `rg` or run `scripts/api-trace.sh`; do not infer an implementation path from filenames alone.
+5. Search with `rg` or run `scripts/api-trace.sh`; do not infer an implementation path from filenames alone.
 - **Version branch model**: `main` is the active development line; `3.0` and `2.6` are the current released maintenance lines. The `cpp/`, `python/`, `java/`, and `rust/` source trees are identical across branches — differences are limited to top-level project files (`2.6` lacks `Makefile`, `codecov.yml`, `docs/`, `tests/`, and `examples/`; `3.0` additionally lacks `examples/`). See [references/branch-differences.md](references/branch-differences.md).
 - **Branch overlay**: the other references describe the `main` baseline. If `git branch --show-current` returns `3.0` or `2.6`, read [references/branch-differences.md](references/branch-differences.md) for top-level files that differ. On `2.6`, build/test commands that rely on the top-level `Makefile` do not apply — use the per-language build system directly (`cpp/Makefile` for C++).
-7. **Stale-working-tree guard**: the checked-out branch (even after `git fetch`) may be old while fetched upstream refs are current. For analysis and tracing, prefer reading source pinned to the relevant upstream branch — `git show refs/remotes/[remote]/[branch]:[path]` and `git ls-tree -r --name-only refs/remotes/[remote]/[branch] [dir]` — where `[remote]` is the remote that points at the native repo (milvus-io or zilliztech), whether it is named `source` or `origin`; confirm it with `git remote -v`, and check the branch set with `git branch --show-current`. Fetch the native remote first when freshness matters (`git fetch [remote]`), because remote-tracking refs can themselves be stale. Before editing, make sure the working tree is on the intended branch and in sync; never edit blindly on an old branch.
+6. **Stale-working-tree guard**: the checked-out branch (even after `git fetch`) may be old while fetched upstream refs are current. For analysis and tracing, prefer reading source pinned to the relevant upstream branch — `git show refs/remotes/[remote]/[branch]:[path]` and `git ls-tree -r --name-only refs/remotes/[remote]/[branch] [dir]` — where `[remote]` is the remote that points at the native repo (milvus-io or zilliztech), whether it is named `source` or `origin`; confirm it with `git remote -v`, and check the branch set with `git branch --show-current`. Fetch the native remote first when freshness matters (`git fetch [remote]`), because remote-tracking refs can themselves be stale. Before editing, make sure the working tree is on the intended branch and in sync; never edit blindly on an old branch.
 
 ## Load the relevant reference
 

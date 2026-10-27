@@ -10,11 +10,26 @@ Work from repository evidence. Treat this skill as a workflow and navigation lay
 ## Repository
 
 - This skill is for the private `zilliztech/cardinal` repository (fork `yhmo/cardinal`), an ANN vector index library integrated into Milvus/Knowhere.
-- Locate the repository checkout in this order:
-  1. `$HOME/work/git-go/cardinal` when it exists on this machine;
-  2. a directory named `cardinal` among the parent directories of the current working directory;
-  3. `/home/runner/work/cardinal/cardinal` (GitHub Actions runner `$GITHUB_WORKSPACE`).
-- Confirm the checkout with `git rev-parse --show-toplevel` and `git remote -v` before relying on it. `source` is normally the upstream `zilliztech/cardinal` remote; `origin` is usually the user's fork. Do not assume the preferred path exists or is the correct repository without verification.
+- Resolve the repository with the bundled helper before relying on a path:
+
+  ```bash
+  python3 "$SKILL_DIR/scripts/resolve_repo.py"
+  ```
+
+  The helper prefers a matching repository at the current cwd, then checks preset
+  locations (`$HOME/work/git-go`, `$HOME/work`, a cwd child/sibling, and the
+  temporary area). If none is valid, it automatically clones
+  `zilliztech/cardinal` to
+  `${TMPDIR:-/tmp}/milvus-skills/cardinal` with remote `source`. The automatic
+  clone is depth-1 by default; pass `--full` only when complete history is
+  required. `--branch` accepts a branch or tag and guarantees the returned checkout is on
+  that ref: a fresh clone checks the ref out directly, and an existing checkout
+  is fetched (depth 1) and switched automatically — no manual fetch/checkout
+  step. Switching is refused while the worktree is dirty; commit, stash, or
+  clean first. Use the returned `path`, `upstream_remote`, `ref_type`, and
+  `ref_action`; pass `--no-clone` when network access must not be used.
+  Confirm the returned checkout with `git rev-parse --show-toplevel` and
+  `git remote -v` before relying on it. `source` is normally the upstream `zilliztech/cardinal` remote; `origin` is usually the user's fork. `zilliztech/cardinal` is a private repository: the automatic clone needs credentials for it. When upstream auth is unavailable, pass `--repo` pointing at an existing checkout of the `yhmo/cardinal` fork instead.
 - **Version branch model**: `master` is the active development line; `2.6` is the current released maintenance line (plus legacy `v1`/`v2` lines). Differences are minimal: `master` adds the `aquila/` directory and a top-level `Makefile`; `2.6` retains the `cmake/` directory that `master` removed. See [references/branch-differences.md](references/branch-differences.md).
 - **Branch overlay**: the other references describe the `master` baseline. If `git branch --show-current` returns `2.6`, read [references/branch-differences.md](references/branch-differences.md) before applying baseline knowledge. On `2.6`, the `aquila/` directory does not exist and CMake configuration comes from `cmake/`.
 - **Stale-working-tree guard**: the checked-out branch (even after `git fetch`) may be old while fetched upstream refs are current. For analysis and tracing, prefer reading source pinned to the relevant upstream branch — `git show refs/remotes/[remote]/[branch]:[path]` and `git ls-tree -r --name-only refs/remotes/[remote]/[branch] [dir]` — where `[remote]` is the remote that points at the native repo (milvus-io or zilliztech), whether it is named `source` or `origin`; confirm it with `git remote -v`, and check the branch set with `git branch --show-current`. Fetch the native remote first when freshness matters (`git fetch [remote]`), because remote-tracking refs can themselves be stale. Before editing, make sure the working tree is on the intended branch and in sync; never edit blindly on an old branch.

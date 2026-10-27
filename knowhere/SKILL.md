@@ -11,11 +11,26 @@ Work from repository evidence. Treat this skill as a workflow and navigation lay
 
 - This skill is for the `zilliztech/knowhere` repository (C++ vector search engine, the ANN core of Milvus).
 - Upstream remote is normally `source`; `origin` is usually the user's fork.
-- Locate the repository checkout in this order:
-  1. `$HOME/work/git-go/knowhere` when it exists on this machine;
-  2. a directory named `knowhere` among the parent directories of the current working directory;
-  3. `/home/runner/work/knowhere/knowhere` (GitHub Actions runner `$GITHUB_WORKSPACE`).
-- Confirm the checkout with `git rev-parse --show-toplevel` and `git remote -v` before relying on it. Do not assume the preferred path exists or is the correct repository without verification.
+- Resolve the repository with the bundled helper before relying on a path:
+
+  ```bash
+  python3 "$SKILL_DIR/scripts/resolve_repo.py"
+  ```
+
+  The helper prefers a matching repository at the current cwd, then checks preset
+  locations (`$HOME/work/git-go`, `$HOME/work`, a cwd child/sibling, and the
+  temporary area). If none is valid, it automatically clones
+  `zilliztech/knowhere` to
+  `${TMPDIR:-/tmp}/milvus-skills/knowhere` with remote `source`. The automatic
+  clone is depth-1 by default; pass `--full` only when complete history is
+  required. `--branch` accepts a branch or tag and guarantees the returned checkout is on
+  that ref: a fresh clone checks the ref out directly, and an existing checkout
+  is fetched (depth 1) and switched automatically — no manual fetch/checkout
+  step. Switching is refused while the worktree is dirty; commit, stash, or
+  clean first. Use the returned `path`, `upstream_remote`, `ref_type`, and
+  `ref_action`; pass `--no-clone` when network access must not be used.
+  Confirm the returned checkout with `git rev-parse --show-toplevel` and
+  `git remote -v` before relying on it.
 - **Version branch model**: `main` is the active development line; `3.0` and `2.6` are the current released maintenance lines. The branches differ significantly in index coverage: `main` adds the sparse inverted-index rewrite (codec/searcher/SINDI), SVS index, faiss direct integration, emb-list strategies, MRL index, clustering kmeans, build scheduler, and SIMD LSX/LASX — most of which are absent from maintenance branches. See [references/branch-differences.md](references/branch-differences.md) for the full comparison.
 - **Branch overlay**: the other references describe the `main` baseline. If `git branch --show-current` returns `3.0` or `2.6`, you MUST read [references/branch-differences.md](references/branch-differences.md) before applying any knowledge from the baseline references. On `3.0`/`2.6`, these baseline items do **not** exist:
   sparse codec (`src/index/sparse/codec/`) · sparse searcher (`src/index/sparse/searcher/`) · SINDI variants · SVS index · `src/index/faiss/` · emb-list strategies · MRL index (`mrl_index_node`) · clustering kmeans · `build_scheduler` · `cancellation` · SIMD LSX/LASX.

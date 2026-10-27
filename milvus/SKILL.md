@@ -10,11 +10,26 @@ Work from repository evidence. Treat this skill as a workflow and navigation lay
 ## Repository
 
 - This skill is for the `milvus-io/milvus` repository.
-- Locate the repository checkout in this order:
-  1. `$HOME/work/git-go/milvus` when it exists on this machine;
-  2. a directory named `milvus` among the parent directories of the current working directory;
-  3. `/home/runner/work/milvus/milvus` (GitHub Actions runner `$GITHUB_WORKSPACE`).
-- Confirm the checkout with `git rev-parse --show-toplevel` and `git remote -v` before relying on it. Do not assume the preferred path exists or is the correct repository without verification.
+- Resolve the repository with the bundled helper before relying on a path:
+
+  ```bash
+  python3 "$SKILL_DIR/scripts/resolve_repo.py"
+  ```
+
+  The helper prefers a matching repository at the current cwd, then checks preset
+  locations (`$HOME/work/git-go`, `$HOME/work`, a cwd child/sibling, and the
+  temporary area). If none is valid, it automatically clones
+  `milvus-io/milvus` to
+  `${TMPDIR:-/tmp}/milvus-skills/milvus` with remote `source`. The automatic
+  clone is depth-1 by default; pass `--full` only when complete history is
+  required. `--branch` accepts a branch or tag and guarantees the returned checkout is on
+  that ref: a fresh clone checks the ref out directly, and an existing checkout
+  is fetched (depth 1) and switched automatically — no manual fetch/checkout
+  step. Switching is refused while the worktree is dirty; commit, stash, or
+  clean first. Use the returned `path`, `upstream_remote`, `ref_type`, and
+  `ref_action`; pass `--no-clone` when network access must not be used.
+  Confirm the returned checkout with `git rev-parse --show-toplevel` and
+  `git remote -v` before relying on it.
 - **Version branch model**: `master` is the 3.1 feature-development line (unreleased); `3.0` and `2.6` are the current released maintenance lines. The branches differ in Go module versions (`pkg/v3`+`client/v3` on `master`/`3.0` vs `pkg/v2`+`client/v2` on `2.6`), package layout, documentation, and Makefile targets. See [references/branch-differences.md](references/branch-differences.md) for the full comparison.
 - **Branch overlay**: the other references describe the `master` baseline. If `git branch --show-current` returns `3.0` or `2.6`, you MUST read [references/branch-differences.md](references/branch-differences.md) before applying any knowledge from the baseline references. On maintenance branches, these baseline items do **not** exist:
   `master` only: `internal/dataview/` · `internal/featureusage/` · `internal/metacache/` · `internal/views/` · pyudf function chain and its Makefile targets · `make generate-segcore-codes` · `docs/agent_guides/` (observability/storage/streaming-system) · `AGENTS.md` / `CLAUDE.md` · `examples/`.

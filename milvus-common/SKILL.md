@@ -10,8 +10,26 @@ Work from repository evidence. This skill is a workflow and navigation layer, no
 ## Repository
 
 - This skill is for the `zilliztech/milvus-common` repository; the user's fork is `yhmo/milvus-common` (remote `origin`), with `source` pointing to upstream.
-- Locate the repository checkout in this order: `$HOME/work/git-go/milvus-common` when it exists on this machine; a directory named `milvus-common` among the parent directories of the current working directory; `/home/runner/work/milvus-common/milvus-common` (GitHub Actions runner `$GITHUB_WORKSPACE`).
-- Confirm the checkout with `git rev-parse --show-toplevel` and `git remote -v` before relying on it. Do not assume the preferred path exists or is the correct repository without verification.
+- Resolve the repository with the bundled helper before relying on a path:
+
+  ```bash
+  python3 "$SKILL_DIR/scripts/resolve_repo.py"
+  ```
+
+  The helper prefers a matching repository at the current cwd, then checks preset
+  locations (`$HOME/work/git-go`, `$HOME/work`, a cwd child/sibling, and the
+  temporary area). If none is valid, it automatically clones
+  `zilliztech/milvus-common` to
+  `${TMPDIR:-/tmp}/milvus-skills/milvus-common` with remote `source`. The automatic
+  clone is depth-1 by default; pass `--full` only when complete history is
+  required. `--branch` accepts a branch or tag and guarantees the returned checkout is on
+  that ref: a fresh clone checks the ref out directly, and an existing checkout
+  is fetched (depth 1) and switched automatically — no manual fetch/checkout
+  step. Switching is refused while the worktree is dirty; commit, stash, or
+  clean first. Use the returned `path`, `upstream_remote`, `ref_type`, and
+  `ref_action`; pass `--no-clone` when network access must not be used.
+  Confirm the returned checkout with `git rev-parse --show-toplevel` and
+  `git remote -v` before relying on it.
 - `master` is the active development line. Legacy lines such as `v1.x` or `2.6` are maintained upstream; confirm the target branch from Git rather than assuming it matches `master`.
 - **Branch overlay**: the differences between `master` and `2.6` are minimal — `2.6` lacks `src/cachinglayer/LoadingOverhead.cpp`, the top-level `Makefile`, `OWNERS`, and `docs/`. See [references/branch-differences.md](references/branch-differences.md). If `git branch --show-current` returns `2.6`, read that overlay before applying baseline knowledge.
 - **Stale-working-tree guard**: the checked-out branch (even after `git fetch`) may be old while fetched upstream refs are current. For analysis and tracing, prefer reading source pinned to the relevant upstream branch — `git show refs/remotes/[remote]/[branch]:[path]` and `git ls-tree -r --name-only refs/remotes/[remote]/[branch] [dir]` — where `[remote]` is the remote that points at the native repo (milvus-io or zilliztech), whether it is named `source` or `origin`; confirm it with `git remote -v`, and check the branch set with `git branch --show-current`. Fetch the native remote first when freshness matters (`git fetch [remote]`), because remote-tracking refs can themselves be stale. Before editing, make sure the working tree is on the intended branch and in sync; never edit blindly on an old branch.
