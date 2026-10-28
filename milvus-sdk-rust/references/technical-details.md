@@ -14,6 +14,7 @@ Use this reference for repository architecture, V1/V2 ownership, API tracing, an
 - Schema and timestamp caches
 - DML validation and conversion
 - DML/DQL timestamps
+- MilvusClientV2Session
 - Query, search, results, and iterators
 - Async and polling behavior
 - Generated protobuf workflow
@@ -153,6 +154,29 @@ and endpoint/database/collection scoped.
 - `set_rpc_deadline` controls per-RPC timeout. Do not confuse it with operation-level polling timeouts.
 - `ConnectConfig` supports URI/token/database, connect and RPC timeouts, keepalive, retry settings, TLS server-name override, custom CA PEM path, and paired client certificate/private-key PEM paths.
 - Normal HTTPS uses native roots. A custom CA replaces native roots. Supplying any TLS option for an HTTP URI upgrades the transport to HTTPS internally. Reject unpaired client certificate/key configuration.
+
+## MilvusClientV2Session
+
+`ClientV2::session` is **Zilliz Cloud only** and returns a cluster-scoped, DQL-only view in
+`src/v2/client/session.rs`. It is a lightweight routing view, not a separate connection: every
+session clone shares the parent client's channel, selected database, RPC settings, schema/timestamp
+caches, telemetry, and global-cluster failover state.
+
+- The session binds one non-empty `cluster_id`; `session("")` returns `Error::Validation`.
+- It exposes only DQL entry points: `search`, `hybrid_search`, `query`, `get`, `query_iterator`,
+  and `search_iterator`. It intentionally does not expose schema, DML, collection administration,
+  RBAC, resource-group, snapshot, or other management APIs.
+- The DQL internals call `set_cluster_param` after protobuf conversion and before the RPC to inject
+  the session's authoritative `cluster_id`. This removes and replaces any user-supplied `cluster_id`
+  param on a session call. On the plain `ClientV2` path, `cluster_id` remains empty and any
+  user-supplied param is preserved.
+- `MilvusClientV2Session` is `Clone`. Clones share one `Arc<AtomicBool>` closed flag; `close()` on
+  any clone rejects all subsequent session calls and does not disconnect the parent client.
+- Query and search iterators created through a session are bound to the same closed flag, so closing
+  the session also stops later pages of iterators created before the close.
+- Do not turn this view into a general scoped client. Add a method only for a DQL operation that is
+  represented by an existing request/response DTO and route it through the matching
+  `*_with_cluster` internal API.
 
 ## V2 error model
 
