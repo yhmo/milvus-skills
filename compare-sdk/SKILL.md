@@ -1,6 +1,6 @@
 ---
 name: compare-sdk
-description: Compare two Milvus SDKs (pymilvus, milvus-sdk-java, milvus-sdk-cpp, milvus-sdk-csharp, milvus-sdk-rust) at pinned branches for facade, request/parameter/default, response/output, input-validation, wire/proto, enum, CollectionTsCache/SchemaCache/Retry, and client-telemetry parity gaps. Produce a validated gap report outside Git work trees or a terminal-only report inside Git work trees. Use for SDK parity or gap comparisons, e.g. "compare-sdk java sdk with pymilvus for master branch".
+description: Compare two Milvus SDKs (pymilvus, milvus-sdk-java, milvus-sdk-cpp, milvus-sdk-csharp, milvus-sdk-rust) at pinned branches for facade, request/parameter/default, response/output, input-validation, wire/proto, enum, CollectionTsCache/SchemaCache/Retry, client-telemetry, and client-session/global-cluster parity gaps. Produce a validated gap report outside Git work trees or a terminal-only report inside Git work trees. Use for SDK parity or gap comparisons, e.g. "compare-sdk java sdk with pymilvus for master branch".
 ---
 
 # compare-sdk
@@ -332,7 +332,7 @@ RPC-issuance behavior:
 
 ### Step 7 - Internal mechanisms audit (deep mode)
 
-Beyond the facade surface, Milvus SDKs share four internal mechanisms that
+Beyond the facade surface, Milvus SDKs share five internal mechanisms that
 shape observable behavior. Audit each one on BOTH SDKs pinned to the branch and
 record divergences in a dedicated section (source locations in
 `references/sdk-map.md` under "Internal mechanisms"). A divergence in either
@@ -467,6 +467,52 @@ Mechanism 4 - Client telemetry:
   a `Partial` mechanism gap. Do not hide it merely because the feature is
   cloud-only or optional; qualify it in the row if that is intentional.
 
+Mechanism 5 - Client session / global-cluster session:
+
+- Generate one session artifact per SDK before reading the implementations:
+
+   ```bash
+   python3 "$SKILL_DIR/scripts/extract_session.py" \
+     --sdk <sdk> \
+     --repo <repo-root> \
+     --ref refs/remotes/source/<branch> \
+     --output "$compare_run_dir/<sdk>.session.json"
+   ```
+
+   The extractor records client factory evidence, session type/method surface,
+   cluster-ID validation and routing evidence, close/iterator lifecycle
+   evidence, and an explicit unavailable capability map for SDKs without a
+   client-session implementation.
+- Compare the two session artifacts:
+
+   ```bash
+   python3 "$SKILL_DIR/scripts/compare_session.py" \
+     --baseline-session "$compare_run_dir/<baseline>.session.json" \
+     --audited-session "$compare_run_dir/<audited>.session.json" \
+     --output "$compare_run_dir/session-comparison.json"
+   ```
+
+   The comparator reports capability and normalized DQL-method differences.
+   Treat its rows as candidates and verify semantics against pinned source
+   before exporting.
+- Compare session even when it is absent from either facade; report the
+  direction explicitly and do not omit the section.
+- Audit and report:
+  - session factory availability and its `cluster_id` parameter/validation;
+  - returned session type and public DQL-method set;
+  - absence of DML/admin operations on the session view;
+  - `cluster_id` accessor and injection/override semantics;
+  - whether the session shares the parent client's connection, database,
+    caches, retry, telemetry, and global-cluster state;
+  - close semantics for the session, its clones/views, and iterators created
+    before close;
+  - synchronous/asynchronous DQL parity and iterator routing;
+  - unavailable versus intentionally out-of-scope status.
+- A session capability, DQL method, routing behavior, validation rule, or
+  lifecycle behavior present on one side but unavailable on the other is a
+  `Partial` mechanism gap. Do not hide it merely because the feature is
+  cloud-only or optional; qualify it in the row if that is intentional.
+
 ### Step 8 - DataType / IndexType enum comparison
 
 - Only when NEITHER SDK is pymilvus (java/cpp/rust/csharp pairs). When pymilvus
@@ -486,9 +532,10 @@ Mechanism 4 - Client telemetry:
   implemented row also records the selected `audited_method_id`, while a
   missing row must leave it null. Start from `map_surface.py` candidates, then
   verify semantics before selecting IDs. Include `collection_ts_cache`,
-  `schema_cache`, `retry`, and `client_telemetry` global checks; bind both
-  surface, behavior, telemetry, and telemetry-comparison SHA-256 values; and
-  carry audited-only methods as `scope=extra` rows. Validate it before export:
+  `schema_cache`, `retry`, `client_telemetry`, and `client_session` global
+  checks; bind surface, behavior, telemetry, telemetry-comparison, session,
+  and session-comparison SHA-256 values; and carry audited-only methods as
+  `scope=extra` rows. Validate it before export:
 
    ```bash
    python3 "$SKILL_DIR/scripts/validate_coverage.py" \
@@ -499,6 +546,9 @@ Mechanism 4 - Client telemetry:
      --baseline-telemetry "$compare_run_dir/<baseline>.telemetry.json" \
      --audited-telemetry "$compare_run_dir/<audited>.telemetry.json" \
      --telemetry-comparison "$compare_run_dir/telemetry-comparison.json" \
+	     --baseline-session "$compare_run_dir/<baseline>.session.json" \
+	     --audited-session "$compare_run_dir/<audited>.session.json" \
+	     --session-comparison "$compare_run_dir/session-comparison.json" \
      --coverage "$compare_run_dir/coverage.json"
    ```
 
@@ -523,8 +573,9 @@ Mechanism 4 - Client telemetry:
 
 - Follow `references/doc-format.md` exactly: header block, Scope, Summary,
   Main gaps, Coverage validation, API Comparison, Input Validation Comparison,
-  Wire-expressiveness audit, Client Telemetry Comparison, Internal Mechanisms
-  Comparison, enum tables (when applicable), and Reproducibility sections.
+  Wire-expressiveness audit, Client Telemetry Comparison, Client Session
+  Comparison, Internal Mechanisms Comparison, enum tables (when applicable),
+  and Reproducibility sections.
 - Keep the Summary counts, Main-gap bullets, and API table consistent with each
   other and with the audited source. Record the branch and commit hash of both
   repos in the report.
@@ -573,14 +624,15 @@ Mechanism 4 - Client telemetry:
   mismatches (one side returns a synthetic result without issuing the RPC, the
   other issues the RPC) are gaps, in either direction.
 - Internal-mechanisms comparison (Step 7) is symmetric and counts in both
-  directions: a CollectionTsCache, SchemaCache, Retry, or client-telemetry
-  behavior the baseline has that the audited side lacks (or vice versa) is a
-  `Partial` gap, reported
-  in the Internal Mechanisms Comparison table. Single-instance singletons and
-  cache-key normalization are not gaps by themselves; missing monotonicity,
-  missing invalidation coverage on schema/DML-mutating APIs, missing
-  guarantee-ts wiring for `ConsistencyLevel.Session`, missing rate-limit
-  retry, or missing schema-mismatch retry are gaps.
+  directions: a CollectionTsCache, SchemaCache, Retry, client-telemetry, or
+  client-session behavior the baseline has that the audited side lacks (or vice
+  versa) is a `Partial` gap, reported in the Internal Mechanisms Comparison
+  table and, for client session, in the Client Session Comparison table.
+  Single-instance singletons and cache-key normalization are not gaps by
+  themselves; missing monotonicity, missing invalidation coverage on
+  schema/DML-mutating APIs, missing guarantee-ts wiring for
+  `ConsistencyLevel.Session`, missing rate-limit retry, missing
+  schema-mismatch retry, or missing cluster-ID session routing are gaps.
 - Proto anchors are generated only by `scripts/resolve_proto.py`: submodule
   gitlinks and C++ `PROTO_COMMIT` resolve to exact `milvus-proto` commits;
   pymilvus uses generated `grpc_gen` descriptors. Record both anchors in the
@@ -632,10 +684,16 @@ Mechanism 4 - Client telemetry:
 - `scripts/compare_telemetry.py`: compare normalized telemetry defaults,
   capabilities, public APIs, and integration evidence from two telemetry
   artifacts.
+- `scripts/extract_session.py`: extract each SDK's client-session capability
+  map, factory/session type evidence, DQL-method surface, cluster-ID routing
+  evidence, and close/iterator lifecycle evidence.
+- `scripts/compare_session.py`: compare normalized session capabilities,
+  methods, and integration evidence from two session artifacts.
 - `scripts/validate_coverage.py`: require every extracted baseline method and
-  every required comparison lens, including defaults and client telemetry, to
-  have a durable completed/not-applicable disposition bound to behavior and
-  telemetry comparison digests before a report may be exported.
+  every required comparison lens, including defaults, client telemetry, and
+  client session, to have a durable completed/not-applicable disposition bound
+  to behavior, telemetry, and session comparison digests before a report may be
+  exported.
 - `scripts/report.py`: create branch-safe UTC report paths, replace/finalize
   report content, validate required sections/commits/placeholders, and refuse
   repository-local output.

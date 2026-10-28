@@ -64,6 +64,30 @@ def telemetry_comparison() -> dict[str, Any]:
     }
 
 
+def session(sdk: str, digest: str) -> dict[str, Any]:
+    return {
+        "sdk": sdk,
+        "ref": "source/test",
+        "commit": "a" * 40,
+        "session_sha256": digest,
+        "capabilities": {},
+    }
+
+
+def session_comparison() -> dict[str, Any]:
+    return {
+        "version": 1,
+        "baseline": "pymilvus",
+        "audited": "java",
+        "baseline_session_sha256": "6" * 64,
+        "audited_session_sha256": "7" * 64,
+        "capabilities": [],
+        "methods": [],
+        "integration_keys": [],
+        "comparison_sha256": "8" * 64,
+    }
+
+
 def fixtures() -> tuple[dict[str, Any], ...]:
     baseline = surface("pymilvus", "insert#0", "a" * 64)
     audited = surface("java", "insert#0", "b" * 64)
@@ -71,6 +95,8 @@ def fixtures() -> tuple[dict[str, Any], ...]:
     audited_behavior = behavior("java", "insert#0", "b" * 64, "2" * 64)
     baseline_telemetry = telemetry("pymilvus", "3" * 64)
     audited_telemetry = telemetry("java", "4" * 64)
+    baseline_session = session("pymilvus", "6" * 64)
+    audited_session = session("java", "7" * 64)
     return (
         baseline,
         audited,
@@ -79,6 +105,9 @@ def fixtures() -> tuple[dict[str, Any], ...]:
         baseline_telemetry,
         audited_telemetry,
         telemetry_comparison(),
+        baseline_session,
+        audited_session,
+        session_comparison(),
     )
 
 
@@ -94,6 +123,9 @@ def valid_coverage() -> dict[str, Any]:
         "baseline_telemetry_sha256": "3" * 64,
         "audited_telemetry_sha256": "4" * 64,
         "telemetry_comparison_sha256": "5" * 64,
+        "baseline_session_sha256": "6" * 64,
+        "audited_session_sha256": "7" * 64,
+        "session_comparison_sha256": "8" * 64,
         "rows": [
             {
                 "baseline_method_id": "insert#0",
@@ -174,6 +206,29 @@ class ValidateCoverageTests(unittest.TestCase):
             "capabilities": {"manager_type": True},
         }
         with self.assertRaisesRegex(SystemExit, "client_telemetry cannot"):
+            self.run_validate(coverage, *artifacts)
+
+    def test_session_digests_are_required(self) -> None:
+        coverage = valid_coverage()
+        coverage["baseline_session_sha256"] = "0" * 64
+        with self.assertRaisesRegex(SystemExit, "baseline session digest"):
+            self.run_validate(coverage)
+
+        coverage = valid_coverage()
+        coverage["session_comparison_sha256"] = "0" * 64
+        with self.assertRaisesRegex(SystemExit, "session comparison digest"):
+            self.run_validate(coverage)
+
+    def test_present_session_cannot_be_marked_not_applicable(self) -> None:
+        coverage = valid_coverage()
+        coverage["global_checks"]["client_session"] = "not_applicable"
+        coverage["global_notes"] = {"client_session": "not relevant"}
+        artifacts = list(fixtures())
+        artifacts[7] = {
+            **artifacts[7],
+            "capabilities": {"factory": True},
+        }
+        with self.assertRaisesRegex(SystemExit, "client_session cannot"):
             self.run_validate(coverage, *artifacts)
 
 

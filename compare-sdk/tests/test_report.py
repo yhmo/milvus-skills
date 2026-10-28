@@ -33,6 +33,7 @@ Scope:
 ## Input Validation Comparison
 ## Wire-expressiveness audit
 ## Client Telemetry Comparison
+## Client Session Comparison
 ## Internal Mechanisms Comparison
 ## Reproducibility
 """.format("a" * 40, "b" * 40)

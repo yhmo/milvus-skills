@@ -26,6 +26,7 @@ REQUIRED_SECTIONS = (
     "## Input Validation Comparison",
     "## Wire-expressiveness audit",
     "## Client Telemetry Comparison",
+    "## Client Session Comparison",
     "## Internal Mechanisms Comparison",
     "## Reproducibility",
 )

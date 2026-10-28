@@ -15,7 +15,7 @@ This format is derived from the existing gap docs (author-machine notes under
 | Status | Meaning |
 |---|---|
 | Implemented | The audited SDK exposes an equivalent facade or request API with the same core capability. |
-| Partial | The audited SDK has the underlying capability but is missing a baseline input parameter/default/coercion behavior or an observable output value/behavior, or input-validation semantics diverge in either direction (see Input Validation Comparison), or wire-expressiveness diverges - proto member mapping, data encoding, or RPC-issuance short-circuit mismatch (see Wire-expressiveness audit), or an internal mechanism diverges - CollectionTsCache / SchemaCache / Retry / client telemetry behavior mismatch (see Internal Mechanisms Comparison), or deprecation status diverges - the interface is marked deprecated on one side but not the other (bidirectional, see Main gaps and API Comparison). |
+| Partial | The audited SDK has the underlying capability but is missing a baseline input parameter/default/coercion behavior or an observable output value/behavior, or input-validation semantics diverge in either direction (see Input Validation Comparison), or wire-expressiveness diverges - proto member mapping, data encoding, or RPC-issuance short-circuit mismatch (see Wire-expressiveness audit), or an internal mechanism diverges - CollectionTsCache / SchemaCache / Retry / client telemetry / client session behavior mismatch (see Client Session Comparison and Internal Mechanisms Comparison), or deprecation status diverges - the interface is marked deprecated on one side but not the other (bidirectional, see Main gaps and API Comparison). |
 | **Missing** | No equivalent audited-SDK facade/request API was found. |
 | Ignored / excluded | Helper, lifecycle, config, deprecated, or legacy-V1 surface not treated as a parity target. |
 
@@ -68,9 +68,9 @@ This format is derived from the existing gap docs (author-machine notes under
   without issuing the RPC, the other issues the RPC - e.g. empty-data
   `insert`/`upsert`). SDK-derived-only fields with no user mapping are ignored.
 - Internal-mechanism divergences count as `Partial` in both directions (see
-  Internal Mechanisms Comparison): CollectionTsCache, SchemaCache, Retry, or
-  client telemetry
-  behavior the baseline has that the audited side lacks (or vice versa).
+  Internal Mechanisms Comparison): CollectionTsCache, SchemaCache, Retry,
+  client telemetry, or client-session behavior the baseline has that the
+  audited side lacks (or vice versa).
   Singleton-vs-per-client scoping and cache-key normalization (empty db ->
   "default", endpoint normalization) are NOT gaps by themselves. Missing
   monotonic ts updates, missing invalidation coverage on schema/DML-mutating
@@ -124,7 +124,8 @@ Scope:
     what is ignored (members with no user mapping on either side)
   - internal-mechanisms audit scope (CollectionTsCache for
     `ConsistencyLevel.Session`, SchemaCache describe-collection short-circuit,
-    Retry policy incl. RateLimit retry, and client telemetry) and what is
+    Retry policy incl. RateLimit retry, client telemetry, and client
+    session/global-cluster routing) and what is
     ignored (singleton-vs-client
     scoping, cache-key normalization)
   - deprecated-status comparison in both directions (interface marked
@@ -169,12 +170,15 @@ Audited behavior SHA-256: ...
 Baseline telemetry SHA-256: ...
 Audited telemetry SHA-256: ...
 Telemetry comparison SHA-256: ...
+Baseline session SHA-256: ...
+Audited session SHA-256: ...
+Session comparison SHA-256: ...
 ```
 
 The validator must report version 2 and all seven per-method checks (`facade`,
 `parameters`, `defaults`, `outputs`, `validation`, `wire`, `deprecated`) plus
-all four global checks (`collection_ts_cache`, `schema_cache`, `retry`,
-`client_telemetry`).
+all five global checks (`collection_ts_cache`, `schema_cache`, `retry`,
+`client_telemetry`, `client_session`).
 
 ## API Comparison
 
@@ -253,6 +257,25 @@ trace every claimed capability to pinned source. Report an explicit
 `**Missing**`/unavailable row for SDKs without a client-side implementation;
 do not omit telemetry merely because it is not in the baseline facade.
 
+## Client Session Comparison
+
+| Aspect | Baseline | Audited side | Direction | Status |
+|---|---|---|---|---|
+| Availability / session type | ... | ... | ... | ... |
+| Factory and cluster-ID validation | ... | ... | ... | ... |
+| DQL method surface | ... | ... | ... | ... |
+| DML/admin exclusion | ... | ... | ... | ... |
+| Cluster-ID injection/override | ... | ... | ... | ... |
+| Parent client sharing | ... | ... | ... | ... |
+| Close/clone/iterator lifecycle | ... | ... | ... | ... |
+
+Use the `extract_session.py` capability map as the minimum checklist, then
+trace every claimed capability to pinned source. Report an explicit
+`**Missing**`/unavailable row for SDKs without a client-session
+implementation; do not omit the section merely because session is absent from
+the baseline facade. The factory itself is lifecycle/config API; the comparison
+must cover the returned session object and routing semantics.
+
 ## Internal Mechanisms Comparison
 
 | Mechanism | Aspect | Baseline | Audited side | Direction | Status |
@@ -261,6 +284,7 @@ do not omit telemetry merely because it is not in the baseline facade.
 | SchemaCache | ... | ... | ... | ... | ... |
 | Retry | ... | ... | ... | ... | ... |
 | Client telemetry | ... | ... | ... | ... | ... |
+| Client session | ... | ... | ... | ... | ... |
 
 One row per mechanism/aspect divergence found in Step 7, in both directions.
 Every row must name the specific aspect and the observed behavior on each side.
@@ -291,6 +315,10 @@ Covered aspects (see `references/sdk-map.md`):
 - Client telemetry: default enablement/config, metrics and heartbeat,
   server-pushed commands, lifecycle handoff, shutdown, and failure isolation;
   use the Client Telemetry Comparison table for the detailed rows.
+- Client session: factory availability, empty `cluster_id` validation, returned
+  session type, DQL-only surface, cluster-ID accessor/injection/override,
+  parent-client sharing, and close/clone/iterator lifecycle; use the Client
+  Session Comparison table for the detailed rows.
 
 Not gaps: singleton-vs-per-client scoping and cache-key normalization (empty db
 -> "default", endpoint normalization). Rows here reconcile with the `Partial`
@@ -337,9 +365,10 @@ C++ `PROTO_COMMIT`, or pymilvus generated descriptors) and commit; note that
 pymilvus vendors no `.proto` files. Record both `extract_telemetry.py`
 commands/digests, the `compare_telemetry.py` command/digest, and the pinned
 source files read per SDK for
-CollectionTsCache, SchemaCache, Retry, and client telemetry (from
-`references/sdk-map.md`), so the mechanism rows can be re-verified at the same
-commits.
+CollectionTsCache, SchemaCache, Retry, client telemetry, and client session
+(from `references/sdk-map.md`), plus both `extract_session.py`
+commands/digests and the `compare_session.py` command/digest, so the mechanism
+rows can be re-verified at the same commits.
 
 ## Update policy
 

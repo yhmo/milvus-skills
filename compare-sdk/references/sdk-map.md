@@ -151,6 +151,33 @@ unknown-command behavior; connection/use-database/username/global-cluster/
 transport-rebound handoff; shutdown; and whether telemetry failures affect
 business RPCs.
 
+### Client session - global-cluster `cluster_id` routing
+
+Run `scripts/extract_session.py` for both SDKs, run
+`scripts/compare_session.py` on the two artifacts, then verify every reported
+capability against these pinned source paths. The artifacts are the
+completeness checklist; they are not a semantic parity verdict.
+
+Client session is a 3.0/master/main-line mechanism and is absent from 2.6. A
+session factory is lifecycle/config-style API, not an ordinary server-capability
+parity row; audit the returned session object and routing semantics as a
+mechanism. Do not infer parity from the factory method alone.
+
+| SDK | Availability / session type | Factory and public session methods | Routing / lifecycle integration |
+|---|---|---|---|
+| pymilvus | `pymilvus/milvus_client/milvus_client.py` (`MilvusClientSession`) | facade `session(cluster_id)`; session exposes search/hybrid-search/query/get and both iterators, plus `close` | session holds parent and `_cluster_id`, validates non-empty ID, and `_with_cluster_id` injects the routing parameter |
+| java | `sdk-core/src/main/java/io/milvus/v2/client/MilvusClientV2Session.java` (`MilvusClientV2Session`) | facade `session(clusterId)` in `MilvusClientV2.java`; session exposes sync/async search/hybrid-search/query, get, iterators, `getClusterId`, and `close` | parent-client overloads carry `clusterId`; session validates non-empty ID and gates calls on `closed` |
+| cpp | `src/include/milvus/MilvusClientV2Session.h` + `src/impl/MilvusClientV2SessionImpl.*` (`MilvusClientV2Session`) | facade `Session(cluster_id, session)` in `MilvusClientV2.h`; session exposes Search/SearchIterator/HybridSearch/Query/Get/QueryIterator, `ClusterID`, and `Close` | session impl holds parent and `cluster_id_`, forwards DQL to `*_with_cluster`-equivalent private overloads; `Close` resets parent and rejects later calls |
+| csharp | `Milvus.Client.V2/MilvusClientV2.Session.cs` (`MilvusClientV2Session`) on `source/main`; absent from 2.6 | facade `Session(clusterId)`; session exposes async search/hybrid-search/query/get and both iterators, `ClusterId`, and `Close` | core methods accept `ClusterId`; session validates non-whitespace-empty ID and gates calls on `_closed`; iterators hold parent/routing directly and are not stopped by later `Close` |
+| rust | `src/v2/client/session.rs` (`MilvusClientV2Session`) | facade `session(cluster_id)` in `src/v2/client.rs`; session exposes async search/hybrid-search/query/get/iterators, `cluster_id`, and `close` | session holds a cloned `ClientV2`; DQL calls use `*_with_cluster`, `set_cluster_param` injects/overrides `cluster_id`, and iterators bind to the session closed flag |
+
+Key behaviors to compare: factory availability and empty-ID validation; exact
+DQL surface; absence of DML/admin methods; cluster-ID accessor and
+injection/override semantics; parent connection/cache/telemetry sharing;
+synchronous/asynchronous parity; iterator routing; close semantics for the
+session, clones/views, and iterators created before close; and explicit
+unavailable status when an SDK has no session mechanism.
+
 
 ## Facade method extraction (pinned to the branch)
 

@@ -27,6 +27,7 @@ GLOBAL_CHECKS = {
     "schema_cache",
     "retry",
     "client_telemetry",
+    "client_session",
 }
 SHA256_PATTERN = re.compile(r"[0-9a-f]{64}")
 
@@ -138,6 +139,55 @@ def validate_telemetry_comparison(
     return digest
 
 
+def validate_session(
+    session: dict[str, Any],
+    surface: dict[str, Any],
+    sdk: str,
+    role: str,
+) -> str:
+    if session.get("sdk") != sdk:
+        raise SystemExit(f"error: {role} session SDK mismatch; expected {sdk}")
+    digest = session.get("session_sha256")
+    if not isinstance(digest, str) or not SHA256_PATTERN.fullmatch(digest):
+        raise SystemExit(f"error: {role} session has an invalid SHA-256 digest: {sdk}")
+    if not isinstance(session.get("capabilities"), dict):
+        raise SystemExit(f"error: {role} session has no capability map")
+    for key in ("ref", "commit"):
+        if session.get(key) != surface.get(key):
+            raise SystemExit(
+                f"error: {role} session {key} does not match extracted surface"
+            )
+    return digest
+
+
+def validate_session_comparison(
+    comparison: dict[str, Any],
+    baseline_sdk: str,
+    audited_sdk: str,
+    baseline_session_digest: str,
+    audited_session_digest: str,
+) -> str:
+    if comparison.get("version") != 1:
+        raise SystemExit("error: session comparison must use version 1")
+    if comparison.get("baseline") != baseline_sdk or comparison.get("audited") != audited_sdk:
+        raise SystemExit("error: session comparison SDK names do not match coverage")
+    digest = comparison.get("comparison_sha256")
+    if not isinstance(digest, str) or not SHA256_PATTERN.fullmatch(digest):
+        raise SystemExit("error: session comparison has an invalid SHA-256 digest")
+    if comparison.get("baseline_session_sha256") != baseline_session_digest:
+        raise SystemExit(
+            "error: session comparison is not bound to baseline session artifact"
+        )
+    if comparison.get("audited_session_sha256") != audited_session_digest:
+        raise SystemExit(
+            "error: session comparison is not bound to audited session artifact"
+        )
+    for key in ("capabilities", "methods", "integration_keys"):
+        if not isinstance(comparison.get(key), list):
+            raise SystemExit(f"error: session comparison has no {key} rows")
+    return digest
+
+
 def validate(
     baseline: dict[str, Any],
     audited: dict[str, Any],
@@ -146,6 +196,9 @@ def validate(
     baseline_telemetry: dict[str, Any],
     audited_telemetry: dict[str, Any],
     telemetry_comparison: dict[str, Any],
+    baseline_session: dict[str, Any],
+    audited_session: dict[str, Any],
+    session_comparison: dict[str, Any],
     coverage: dict[str, Any],
 ) -> dict[str, Any]:
     if coverage.get("version") != 2:
@@ -190,6 +243,27 @@ def validate(
     if coverage.get("telemetry_comparison_sha256") != telemetry_comparison_digest:
         raise SystemExit(
             "error: coverage telemetry comparison digest does not match artifact"
+        )
+    baseline_session_digest = validate_session(
+        baseline_session, baseline, baseline_sdk, "baseline"
+    )
+    audited_session_digest = validate_session(
+        audited_session, audited, audited_sdk, "audited"
+    )
+    if coverage.get("baseline_session_sha256") != baseline_session_digest:
+        raise SystemExit("error: coverage baseline session digest does not match artifact")
+    if coverage.get("audited_session_sha256") != audited_session_digest:
+        raise SystemExit("error: coverage audited session digest does not match artifact")
+    session_comparison_digest = validate_session_comparison(
+        session_comparison,
+        baseline_sdk,
+        audited_sdk,
+        baseline_session_digest,
+        audited_session_digest,
+    )
+    if coverage.get("session_comparison_sha256") != session_comparison_digest:
+        raise SystemExit(
+            "error: coverage session comparison digest does not match artifact"
         )
 
     baseline_ids = surface_ids(baseline, baseline_sdk)
@@ -271,6 +345,15 @@ def validate(
         raise SystemExit(
             "error: client_telemetry cannot be not_applicable when either SDK has telemetry"
         )
+    session_relevant = any(
+        bool(artifact.get("capabilities", {}).get("factory"))
+        or bool(artifact.get("capabilities", {}).get("session_type"))
+        for artifact in (baseline_session, audited_session)
+    )
+    if session_relevant and global_checks["client_session"] == "not_applicable":
+        raise SystemExit(
+            "error: client_session cannot be not_applicable when either SDK has a client session"
+        )
 
     summary = coverage.get("summary")
     if isinstance(summary, dict):
@@ -300,6 +383,9 @@ def main() -> int:
     parser.add_argument("--baseline-telemetry", type=Path, required=True)
     parser.add_argument("--audited-telemetry", type=Path, required=True)
     parser.add_argument("--telemetry-comparison", type=Path, required=True)
+    parser.add_argument("--baseline-session", type=Path, required=True)
+    parser.add_argument("--audited-session", type=Path, required=True)
+    parser.add_argument("--session-comparison", type=Path, required=True)
     parser.add_argument("--coverage", type=Path, required=True)
     args = parser.parse_args()
     result = validate(
@@ -310,6 +396,9 @@ def main() -> int:
         load_json(args.baseline_telemetry),
         load_json(args.audited_telemetry),
         load_json(args.telemetry_comparison),
+        load_json(args.baseline_session),
+        load_json(args.audited_session),
+        load_json(args.session_comparison),
         load_json(args.coverage),
     )
     print(json.dumps(result, sort_keys=True))
