@@ -213,6 +213,11 @@ def _extract_targz(pkg, dest):
 def install_github_release(version):
     """Download and extract the platform-matching binary from GitHub releases.
     Return (include_dir, lib_dir) on success, else None."""
+    reuse_inc = os.path.join(GH_DEPLOY, "pkg", "usr", "include")
+    reuse_lib = os.path.join(GH_DEPLOY, "pkg", "usr", "lib")
+    if os.path.isfile(os.path.join(reuse_inc, "milvus", "MilvusClientV2.h")) and \
+            os.path.isdir(reuse_lib):
+        return reuse_inc, reuse_lib
     try:
         assets = github_assets(version)
     except Exception as e:

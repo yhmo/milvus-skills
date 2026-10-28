@@ -165,6 +165,7 @@ def main():
             m = SHORT.match(ln)
             if m:
                 names = [n.strip() for n in m.group(2).split(',')]
+                names = [n for n in names if n != "_"]
                 if names and all(nm in seen for nm in names):
                     flat.append(f"{m.group(1)}{m.group(2)} = {m.group(3)}")
                     continue
@@ -196,7 +197,7 @@ def main():
             fixed_lines.append(ln)
             continue
         m = ASSIGN.match(ln)
-        if m and m.group(2) not in declared:
+        if m and m.group(2) != "_" and m.group(2) not in declared:
             declared.add(m.group(2))
             fixed_lines.append(f"{m.group(1)}{m.group(2)} := {m.group(3)}")
             continue
@@ -209,14 +210,17 @@ def main():
     for ln in body_src.split("\n"):
         am = ASSIGN.match(ln)
         if am:
-            lhs_names.add(am.group(2))
+            if am.group(2) != "_":
+                lhs_names.add(am.group(2))
         sm = SHORTD.match(ln)
         if sm:
-            lhs_names.add(sm.group(1))
+            if sm.group(1) != "_":
+                lhs_names.add(sm.group(1))
         mm = MULTI.match(ln)
         if mm:
             for nm in re.split(r"\s*,\s*", mm.group(1)):
-                lhs_names.add(nm)
+                if nm != "_":
+                    lhs_names.add(nm)
     body_src = body_src.rstrip()
     for nm in sorted(lhs_names):
         if len(re.findall(rf"(?<![\w.]){re.escape(nm)}\b", body_src)) <= 1:
