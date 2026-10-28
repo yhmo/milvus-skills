@@ -346,14 +346,48 @@ def main():
             "", b, flags=re.S)
         cleaned.append(b)
     bodies = cleaned
+    if not any("<utility>" in i for i in includes):
+        includes.append("#include <utility>")
+    if not any("<iostream>" in i for i in includes):
+        includes.append("#include <iostream>")
     prog = "\n".join(includes) + "\n\nint main() {\n"
     prog += '    auto client = milvus::MilvusClientV2::Create();\n'
     prog += '    auto status = client->Connect(milvus::ConnectParam("http://localhost:19530").WithToken("root:Milvus"));\n'
     prog += '    if (!status.IsOk()) { return 1; }\n'
+    # Flatten per-block scopes; re-declarations of seen names become assignments
+    # (C++ forbids redeclaring in the same scope; docs define once and reuse).
+    seen = {"status", "client", "connect_param"}
+    DECL = re.compile(
+        r"^(?P<indent>\s*)(?:const\s+)?(?:auto\s+(?P<aname>[A-Za-z_][\w$]*)"
+        r"|(?P<type>[A-Za-z_][\w:<>\s]*?)\s+(?P<tname>[A-Za-z_][\w$]*))"
+        r"\s*(?:=(?!=)\s*(?P<rest>.*))?;?\s*$")
+    flat = []
+    for b in bodies:
+        for ln in b.split("\n"):
+            m = DECL.match(ln)
+            if m:
+                name = m.group("aname") or m.group("tname")
+                if name in seen:
+                    if m.group("rest"):
+                        flat.append(f"{m.group('indent')}{name} = {m.group('rest')}")
+                    continue
+                seen.add(name)
+            flat.append(ln)
+        flat.append("")
+    bodies = ["\n".join(flat).rstrip()]
+
+    # Builder methods take rvalue-ref params; wrap bare-identifier args in
+    # std::move so lvalue locals bind (e.g. .WithIndexes(index_params)).
+    moved = []
+    for b in bodies:
+        b = re.sub(r"\.(With[A-Za-z]\w*)\(([A-Za-z_][\w.]*)\)",
+                   lambda m: f".{m.group(1)}(std::move({m.group(2)}))", b)
+        moved.append(b)
+    bodies = moved
+
     for i, b in enumerate(bodies):
-        prog += f"    // === block {i} ===\n    {{\n"
+        prog += f"    // === block {i} ===\n"
         prog += "\n".join("        " + ln for ln in b.split("\n")) + "\n"
-        prog += "    }\n"
     prog += "    return 0;\n}\n"
 
     os.makedirs(PROJ, exist_ok=True)

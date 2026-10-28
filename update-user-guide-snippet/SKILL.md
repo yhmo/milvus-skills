@@ -368,6 +368,29 @@ Updating a document WITHOUT the corresponding SDK skill risks API deviations
       how the user prompt is phrased (see the Baseline guard in Scope). Only
       after the baseline is verified may you proceed to the Missing SDKs rule
       below.
+   - **Feature-scope exception — bulk writer / bulk import (pymilvus & Java
+      only).** Bulk-writer/bulk-import features (`RemoteBulkWriter`,
+      `LocalBulkWriter`, `BulkWriter`, `bulk_import` / `BulkImport`) are
+      implemented ONLY by pymilvus and milvus-sdk-java. In documents whose
+      subject is bulk writer / bulk import (e.g. "Data Import Hands-On"
+      <https://zilliverse.feishu.cn/wiki/BjHZwBkk0iFScik49QMc1Wwjndb>,
+      "Import Data (SDK)", any BulkWriter usage page), write **only `Python`
+      and `Java` SDK blocks** — never add Go/Rust/C++/JavaScript blocks to
+      such documents, not even the "not supported" empty placeholder blocks
+      described below, and never report those languages as missing for them.
+      Their absence is intentional feature scope, not an omission.
+   - **Feature-scope exception — Expected output sections (Python only).**
+      `Expected output` sections exist solely to SHOW the output of the
+      preceding runnable example — they are not multi-SDK code groups. Do not
+      add other languages to an `Expected output` section, do not treat its
+      Python-only block as a missing-SDK gap, and never report it as missing.
+   - **Feature-scope exception — install / prerequisite command sections
+      (Bash only).** Sections whose content is package installation or
+      environment-setup commands (`pip install` / `npm install` / `go get` /
+      Maven dependency snippets / `brew` / curl installers, under headings like
+      `Install ...` or `Prerequisites`) are shell commands by nature — they are
+      not SDK code groups. Keep them Bash-only, never add other languages
+      there, and never report them as missing.
    - **Missing SDKs** → for a `<synced-source>` section, add the missing
       language's block using the pymilvus block as the logic baseline,
       translated per the conventions in
@@ -530,6 +553,24 @@ Updating a document WITHOUT the corresponding SDK skill risks API deviations
       in the same document are expected and correct; do NOT strip them to
       "deduplicate" — when the harness assembles multiple blocks into one test
       file, IT deduplicates reference lines, never the doc.
+   - **No function wrapper either (all languages).** The fragment rule above is
+      not limited to entry points: never wrap the logic body in any named
+      function/method either. A block must be reference lines + bare statements
+      — not `private static String bulkImport() { ... }` (Java),
+      `private static void getImportProgress(String jobId) { ... }` (Java),
+      `def bulk_import(): ...` (Python), `func bulkImport() { ... }` (Go), or
+      any other function enclosing the body. If the upstream code organizes the
+      flow into a helper, inline it into the block: keep the statements (with
+      any locals they need hoisted), so a reader pastes executable statements
+      rather than a function definition they cannot call.
+      **Allowed exception — helper-definition blocks mirroring pymilvus.** A
+      block that exists to DEFINE a helper function used immediately below in
+      the same block or by later sections (e.g. a `print_search_results`
+      formatter defined once per SDK, mirroring the pymilvus block's
+      `def print_search_results(...)`) is NOT a violation: write it following
+      the pymilvus baseline's structure. The prohibition targets wrapper SHELLS
+      that lock the block's whole logic behind a function call, not legitimate
+      helper definitions that are part of the flow.
    - Code blocks that are **fragments by design** (a mid-file data array, a
      continuation block referencing earlier blocks) may fail a standalone parse;
      judge by intent — concatenate continuation blocks in the same section for
@@ -651,6 +692,10 @@ Updating a document WITHOUT the corresponding SDK skill risks API deviations
        the report:
        - **Bulk import** (`bulk_import` / `BulkImport` / `createImportJobs` /
          `jobs/import/*`) — needs data files in S3/external storage.
+       - **External collections** (`ExternalSource` / `external_source` /
+         `CreateExternalCollectionReq` / collection docs referencing
+         `s3://` external data paths) — needs the referenced S3/external
+         storage; syntax-check only.
        - **CDC / change-data-capture** related APIs.
        - **FileResource** related APIs.
        - **ExternalTable** related APIs.

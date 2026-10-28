@@ -104,11 +104,33 @@ def main():
     for b in bodies:
         b = re.sub(r"\w+,\s*err\s*[:=]=\s*milvusclient\.New\(.*?\)", "", b, flags=re.S)
         b = re.sub(r"\w+Addr\s*[:=]=\s*\"[^\"]*19530[^\"]*\"", "", b)
-        b = re.sub(r"(_,?\s*cancel|ctx,\s*cancel)\s*[:=]=\s*context\.WithCancel\([^)]*\)", "", b)
+        b = re.sub(r"^\s*token\s*:?=?\s*\"root:Milvus\"\s*$", "", b, flags=re.M)
+        b = re.sub(r"(_,?\s*cancel|ctx,\s*cancel)\s*[:=]=\s*context\.WithCancel\(.*\)", "", b)
         b = re.sub(r"ctx\s*[:=]=\s*context\.Background\(\)", "", b)
         b = re.sub(r"defer\s+cancel\(\)", "", b)
         b = re.sub(r"defer\s+(?:client|cli)\.Close\(ctx\)", "", b)
         cleaned.append(b)
+
+    # Balanced-paren cleanup: the regexes above miss multi-line
+    # `cli, err := milvusclient.New(ctx, &milvusclient.ClientConfig{...})`
+    # calls (lazy `.*?` stops at the first `)`) and leave stray `)` lines
+    # that break compilation. Scan line-by-line with paren depth instead.
+    final = []
+    i = 0
+    while i < len(cleaned):
+        ln = cleaned[i]
+        m = re.search(r"\w+,\s*err\s*[:=]=\s*milvusclient\.New\(", ln)
+        if m:
+            start = m.start()
+            depth = ln.count("(", start) - ln.count(")", start)
+            i += 1
+            while i < len(cleaned) and depth > 0:
+                depth += cleaned[i].count("(") - cleaned[i].count(")")
+                i += 1
+            continue
+        final.append(ln)
+        i += 1
+    cleaned = final
     bodies = cleaned
 
     # detect the client variable name used by the page's blocks (`cli` or `client`)
@@ -132,10 +154,78 @@ def main():
     prog += '    })\n'
     prog += '    if err != nil {\n        log.Fatal(err)\n    }\n'
     prog += f'    defer {var_name}.Close(ctx)\n'
+    # Flatten per-block scopes; convert re-declarations of seen names from
+    # `name := value` to `name = value` so cross-block references work while
+    # re-runs of the same flow don't trip "no new variables".
+    seen = set()
+    flat = []
+    SHORT = re.compile(r"^(\s*)([A-Za-z_][\w$]*(?:\s*,\s*[A-Za-z_][\w$]*)*)\s*:=\s*(.*)$")
+    for b in bodies:
+        for ln in b.split("\n"):
+            m = SHORT.match(ln)
+            if m:
+                names = [n.strip() for n in m.group(2).split(',')]
+                if names and all(nm in seen for nm in names):
+                    flat.append(f"{m.group(1)}{m.group(2)} = {m.group(3)}")
+                    continue
+                seen.update(names)
+            flat.append(ln)
+        flat.append("")
+    bodies = [b for b in "\n".join(flat).split("\n// ===") ]  # keep as flat lines list handled below
+    # rebuild bodies as a single body list for assembly
+    bodies = ["\n".join(flat).rstrip()]
+
+    # Doc fragments may use bare assignments (`name = value`) assuming a prior
+    # declaration the page never contains (analyzer docs do this). Convert the
+    # FIRST bare assignment of each name into a `:=` declaration; later bare
+    # assignments stay plain (Go: assignment to declared var). Harness-only.
+    declared = {"err", "ctx", "client", "cli"}
+    ASSIGN = re.compile(r"^(\s*)([A-Za-z_][\w$]*)\s*=\s*(?!=)(.*)$")
+    SHORTD = re.compile(r"^\s*([A-Za-z_][\w$]*)\s*:=\s*")
+    MULTI = re.compile(r"^\s*([A-Za-z_][\w$]*(?:\s*,\s*[A-Za-z_][\w$]*)+)\s*:?=.")
+    fixed_lines = []
+    src = "\n".join(bodies)
+    for ln in src.split("\n"):
+        sm = SHORTD.match(ln)
+        if sm:
+            declared.add(sm.group(1))
+            mm = MULTI.match(ln)
+            if mm:
+                for nm in re.split(r"\s*,\s*", mm.group(1)):
+                    declared.add(nm)
+            fixed_lines.append(ln)
+            continue
+        m = ASSIGN.match(ln)
+        if m and m.group(2) not in declared:
+            declared.add(m.group(2))
+            fixed_lines.append(f"{m.group(1)}{m.group(2)} := {m.group(3)}")
+            continue
+        fixed_lines.append(ln)
+    body_src = "\n".join(fixed_lines)
+
+    # Harness-only: blank-use for variables the doc declares but never reads
+    # (Go rejects unused locals; docs are fragments that may not print).
+    lhs_names = set()
+    for ln in body_src.split("\n"):
+        am = ASSIGN.match(ln)
+        if am:
+            lhs_names.add(am.group(2))
+        sm = SHORTD.match(ln)
+        if sm:
+            lhs_names.add(sm.group(1))
+        mm = MULTI.match(ln)
+        if mm:
+            for nm in re.split(r"\s*,\s*", mm.group(1)):
+                lhs_names.add(nm)
+    body_src = body_src.rstrip()
+    for nm in sorted(lhs_names):
+        if len(re.findall(rf"(?<![\w.]){re.escape(nm)}\b", body_src)) <= 1:
+            body_src += f"\n    _ = {nm}"
+    bodies = [body_src]
+
     for i, b in enumerate(bodies):
-        prog += f"    // === block {i} ===\n    {{\n"
+        prog += f"    // === block {i} ===\n"
         prog += "\n".join("        " + ln for ln in b.split("\n")) + "\n"
-        prog += "    }\n"
     prog += "}\n"
 
     os.makedirs(PROJ, exist_ok=True)

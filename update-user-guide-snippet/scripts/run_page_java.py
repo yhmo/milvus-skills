@@ -116,14 +116,35 @@ def main():
         cleaned.append(b)
     bodies = cleaned
 
+    # Flatten per-block scopes so cross-block variable references work
+    # (pymilvus baseline defines once, reuses later). Java forbids redeclaring
+    # a variable in the same scope, so transform re-declarations of an
+    # already-seen name into plain assignments.
+    seen = set()
+    DECL = re.compile(
+        r"^(?P<indent>\s*)(?:final\s+)?"
+        r"(?P<type>[A-Za-z_$][\w.$]*(?:<[^=;]*?>)?(?:\[\])?)"
+        r"\s+(?P<name>[A-Za-z_$][\w$]*)\s*=(?!=)\s*(?P<rest>.*)$")
+    flat = []
+    for b in bodies:
+        out = []
+        for ln in b.split("\n"):
+            m = DECL.match(ln)
+            if m and m.group("name") in seen and m.group("type") not in ("return", "new"):
+                out.append(f"{m.group('indent')}{m.group('name')} = {m.group('rest')}")
+                continue
+            if m:
+                seen.add(m.group("name"))
+            out.append(ln)
+        flat.append("\n".join(out))
+    bodies = flat
+
     prog = "\n".join(first_imports) + "\n\npublic class RunPage {\n"
     prog += "    public static void main(String[] args) throws Exception {\n"
     prog += f"        {client_init}\n"
     for i, b in enumerate(bodies):
         prog += f"        // === block {i} ===\n"
-        prog += "        {\n"
         prog += "\n".join("            " + ln for ln in b.split("\n")) + "\n"
-        prog += "        }\n"
     prog += "    }\n}\n"
 
     os.makedirs(SRC, exist_ok=True)

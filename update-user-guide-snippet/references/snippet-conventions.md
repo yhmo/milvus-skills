@@ -50,6 +50,33 @@ logic body inside `main`, then build and run. The assembly is the test
 harness's job — the doc block itself must stay a fragment, so readers see the
 logic without boilerplate and can paste the body into their own program.
 
+The rule covers every function wrapper, not only entry points: a block must
+never be the body of a named function/method either — no
+`private static String bulkImport() { ... }` (Java), no
+`private static void getImportProgress(String jobId) { ... }` (Java), no
+`def bulk_import(): ...` (Python), no `func bulkImport() { ... }` (Go), or any
+other function enclosing the body. Reference lines + bare statements only. If
+the upstream code organizes the flow into a helper, inline its statements into
+the block (hoisting any locals the statements need) instead of keeping the
+function shell.
+
+Allowed exception: a block that DEFINES a helper used immediately below in the
+same block or by later sections (mirroring the pymilvus baseline's structure,
+e.g. a `print_search_results(results, title)` formatter) is legitimate — write
+the equivalent helper in each SDK following pymilvus. The prohibition targets
+wrapper shells hiding the whole logic behind a call, not helper definitions
+that are part of the flow.
+
+`Expected output` sections are a second exception: they exist only to SHOW the
+output of the preceding runnable example. Keep them Python-only — never add
+other SDK blocks there and never report them as missing.
+
+Install / prerequisite sections are a third: package-install and
+environment-setup commands (pip / npm / go get / Maven deps / brew, under
+headings like `Install ...` or `Prerequisites`) stay Bash-only — they are
+shell commands by nature, not SDK code groups, so never add other languages
+there and never report them as missing.
+
 ## pymilvus — `python` (reference baseline)
 
 - Client init:
@@ -174,6 +201,14 @@ cli, err := milvusclient.New(ctx, &milvusclient.ClientConfig{
   ```
   Use the language's comment syntax (`#` for python/bash, `//` for
   cpp/java/go/javascript/rust). Never invent API code — only the comment.
+- **Feature scope — bulk writer / bulk import is pymilvus & Java only.**
+  `RemoteBulkWriter` / `LocalBulkWriter` / `BulkWriter` / bulk-import APIs
+  exist only in pymilvus and milvus-sdk-java. Documents whose subject is bulk
+  writer or bulk import (e.g. "Data Import Hands-On", "Import Data (SDK)",
+  any BulkWriter usage page) carry only `Python` and `Java` blocks — never
+  add other SDK blocks to them, not even the "not supported" placeholder
+  comment blocks above, and never report the other languages as missing for
+  these documents. Their absence is intentional feature scope.
 - Numbered comments must stay in sync across all SDKs in a section (the pymilvus
   block defines the numbering).
 - Prefer the same endpoint/collection/db names across SDKs so readers can compare

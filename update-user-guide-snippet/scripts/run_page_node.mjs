@@ -39,6 +39,8 @@ const bodies = blocks.map(b => {
 // strip per-block client init so one shared client is created in main()
 const stripped = bodies.map(b =>
   b.replace(/const\s+client\s*=\s*new\s+MilvusClient\([\s\S]*?\);/g, '')
+    .replace(/\bconst\s+/g, 'var ')
+    .replace(/\blet\s+/g, 'var ')
 );
 
 const prog =
@@ -46,10 +48,10 @@ const prog =
   '\n\nasync function main() {\n' +
   '  const client = new MilvusClient({ address: "http://localhost:19530", token: "root:Milvus" });\n' +
   stripped
-    .map((b, i) => `  // === block ${i} ===\n  {\n${b
+    .map((b, i) => `  // === block ${i} ===\n${b
         .split('\n')
         .map(l => '    ' + l)
-        .join('\n')}\n  }`)
+        .join('\n')}`)
     .join('\n\n') +
   '\n}\n' +
   'main()\n' +

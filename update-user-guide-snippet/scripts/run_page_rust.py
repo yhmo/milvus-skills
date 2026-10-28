@@ -128,9 +128,8 @@ def main():
     prog = "\n".join(uses) + "\n\n#[tokio::main]\nasync fn main() -> Result<()> {\n"
     prog += '    let client = ClientV2::new(\n        &ConnectConfig::new().uri("http://localhost:19530").token("root:Milvus"),\n    )\n    .await?;\n'
     for i, b in enumerate(bodies):
-        prog += f"    // === block {i} ===\n    {{\n"
+        prog += f"    // === block {i} ===\n"
         prog += "\n".join("        " + ln for ln in b.split("\n")) + "\n"
-        prog += "    }\n"
     prog += "    Ok(())\n}\n"
 
     os.makedirs(SRC, exist_ok=True)
