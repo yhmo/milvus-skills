@@ -15,6 +15,7 @@ Use this reference for repository architecture, V1/V2 ownership, API tracing, an
 - DML validation and conversion
 - DML/DQL timestamps
 - MilvusClientV2Session
+- Client telemetry
 - Query, search, results, and iterators
 - Async and polling behavior
 - Generated protobuf workflow
@@ -52,6 +53,7 @@ Ownership boundaries:
 - `src/v2/error.rs`: V2-owned error/result types and server-status decoding.
 - `src/v2/bulk_import.rs`: bulk-import configuration and client support.
 - `src/v2/client/<area>.rs`: feature APIs for alias, CDC, collection, database, DML, DQL, index, iterator, partition, RBAC, resource group, snapshot, utility, global cluster, session, and telemetry.
+- `src/v2/client/telemetry.rs`: public `ClientTelemetry` manager plus operation guards, heartbeats, metrics/errors, and server-command handling.
 - `src/v2/request/<area>.rs`: SDK-owned public request DTOs and crate-private request-to-protobuf conversion.
 - `src/v2/response/<area>.rs`: SDK-owned public response DTOs and crate-private protobuf-to-response conversion.
 - `src/v2/types/<area>.rs`: V2-only schemas, field data, connection/retry parameters, reusable values, and function types.
@@ -154,6 +156,41 @@ and endpoint/database/collection scoped.
 - `set_rpc_deadline` controls per-RPC timeout. Do not confuse it with operation-level polling timeouts.
 - `ConnectConfig` supports URI/token/database, connect and RPC timeouts, keepalive, retry settings, TLS server-name override, custom CA PEM path, and paired client certificate/private-key PEM paths.
 - Normal HTTPS uses native roots. A custom CA replaces native roots. Supplying any TLS option for an HTTP URI upgrades the transport to HTTPS internally. Reject unpaired client certificate/key configuration.
+
+## Client telemetry
+
+Client telemetry exists on the current main line only; the 2.6 branch has no `telemetry.rs`,
+`ClientV2::telemetry`, or `ClientTelemetry` export. Do not add telemetry APIs or telemetry-dependent
+behavior to 2.6 work.
+
+`ConnectConfig::telemetry` accepts a `TelemetryConfig`. Defaults are enabled, a 10-second
+heartbeat/metrics interval, sampling rate `1.0`, 100 retained errors, and an empty client ID. A
+non-empty `client_id` is pinned across process restarts; otherwise `ClientTelemetry::new` generates
+a UUID. Zero heartbeat/error-capacity values are normalized to defaults when the telemetry runtime
+is constructed, and sampling rates are clamped to `0.0..=1.0`.
+
+`ClientV2::connect` creates one `ClientTelemetry` from the shared service bundle/database state,
+starts its Tokio heartbeat task when enabled, and stores it inside the client. Client clones and
+`MilvusClientV2Session` views therefore share the same manager. `ClientV2::telemetry()` returns a
+cloned handle for diagnostics, snapshots, recent errors, and custom command handlers.
+
+Operation guards record one logical SDK operation for `Insert`, `Upsert`, `Delete`, `Query` (also
+used by Get), `Search`, `HybridSearch`, and `RunAnalyzer`; internal retries issued inside the same
+guarded call remain part of that logical operation. Metrics include
+request/success/error counts and mean/p99/max latency globally and per collection. Recent errors
+correlate an optional 32-character OpenTelemetry-compatible `client_request_id` propagated by
+`new_client_request_id` / `with_client_request_id`.
+
+Heartbeats use the dedicated telemetry service in the current service bundle, carry snapshots and
+pending command replies, and process server commands for `push_config`, collection-metric filters,
+recent errors/latency history, and `get_config`. Custom handlers can be registered by command type.
+`UNIMPLEMENTED` responses increase an unsupported streak with bounded backoff; channel resets or
+global-cluster failover bump the transport generation and wake/probe telemetry immediately.
+Credential reset updates the reported username. If a server disables a running client through
+`push_config`, metric collection stops while a lightweight command heartbeat remains available for
+acks and later re-enable.
+
+Telemetry is best-effort and must not alter the result of a business RPC.
 
 ## MilvusClientV2Session
 

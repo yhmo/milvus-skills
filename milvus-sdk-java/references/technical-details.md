@@ -63,6 +63,44 @@ Keep public facade methods thin. Domain validation and protobuf mapping belong i
 
 `MilvusClientV2` is safe for concurrent RPCs only while connection and database state remain unchanged. Serialize `useDatabase`, `close`, password-reset reconnection, and lifecycle/schema DDL against affected DML/DQL operations.
 
+## Client telemetry
+
+Client telemetry is part of the 3.0/master line only and is absent from 2.6. Do not reference it, or
+add compatibility shims for it, in 2.6 work.
+
+The implementation is under `io.milvus.telemetry`:
+
+- `TelemetryConfig`: enabled, heartbeat interval, sampling rate, error capacity, and optional stable
+  client ID.
+- `ClientTelemetryManager`: operation metrics, snapshots/errors, heartbeat worker, server-command
+  processing, and runtime-state handoff.
+- `TelemetryInterceptor`: records selected unary RPCs at the gRPC boundary.
+
+`ConnectConfig` defaults to `TelemetryConfig.defaults()`: enabled, a 10-second heartbeat and metrics
+window, full sampling, 100 retained errors, and an empty client ID (a UUID is generated when no
+stable ID is set). `MilvusClientV2.connect()` creates the manager before the gRPC channel, attaches
+`TelemetryInterceptor` to that channel, sets the telemetry stub after the Milvus `Connect` handshake
+returns an identifier, and starts the worker unless `ConnectConfig.deferTelemetryStart(true)` was
+used. `startTelemetry()` starts the deferred worker; `getTelemetry()` returns the manager for
+diagnostics and custom command handlers, and resolves to the primary inner client under global
+cluster routing.
+
+`TelemetryInterceptor` records one logical operation for `Insert`, `Upsert`, `Delete`, `Query`,
+`Search`, `HybridSearch`, and `RunAnalyzer`. It suppresses nested calls already inside a logical
+operation, derives the collection from the protobuf request, and treats business failure as an error
+even when the gRPC status itself is OK. Retries inside one facade call remain one logical operation.
+Metrics retain request/success/error counts and mean/p99/max latency globally and per collection.
+
+The manager is thread-safe and `AutoCloseable`. A successful heartbeat flushes pending command
+replies and processes server commands for configuration pushes, collection-metric filters, recent
+errors/latency history, and config queries. Persistent command hashes are deterministic across SDKs.
+Repeated `UNIMPLEMENTED` responses back off and mark the current server unsupported. Global-cluster
+failover carries telemetry runtime state, client ID/config hash, command cursor/replies, and metric
+filters to the replacement primary client.
+
+Telemetry is best-effort: interceptor and heartbeat failures must be logged/skipped rather than
+changing the result of a Milvus business RPC.
+
 ## Global-cluster routing
 
 Global endpoints are detected from the configured URI. `GlobalStub` fetches topology, owns an inner client for the current primary, runs `TopologyRefresher`, and swaps the outer client's channel/stub when the primary changes.

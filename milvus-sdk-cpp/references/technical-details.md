@@ -9,6 +9,7 @@ on the current `master`/active line.
 - Source layout
 - Public API and DTO conventions
 - RPC execution and connection lifecycle
+- Client telemetry
 - Schema and session timestamp caches
 - DML, DQL, iterators, and sessions
 - Protobuf and build targets
@@ -51,6 +52,8 @@ Implementation:
 - `src/impl/MilvusClientImpl.*`: legacy API orchestration.
 - `src/impl/MilvusClientV2Impl.*`: active V2 API orchestration and internal overloads used by sessions/iterators.
 - `src/impl/MilvusClientV2SessionImpl.*`: session lifetime and cluster-ID forwarding.
+- `src/impl/ClientTelemetry.cpp`: implementation behind the public telemetry manager.
+- `src/impl/utils/TelemetryUtils.h`: RPC timing/recording helper.
 - `src/impl/MilvusConnection.*`: channel/stub ownership, connect handshake, status conversion, and one-line RPC wrappers.
 - `src/impl/MilvusInterceptor.*`: authorization/database metadata injection.
 - `src/impl/request/<area>/`, `response/<area>/`, `types/`: non-inline DTO/model implementations.
@@ -60,6 +63,10 @@ Implementation:
 - `src/impl/utils/TypeUtils.*`: general protobuf/SDK model conversions.
 - `src/impl/utils/ConnectionHandler.*`: synchronized connection state, retry/deadline snapshots, and API pipeline.
 - `src/impl/utils/cache/`: `CollectionCacheKey`, `SchemaCache`, and `CollectionTsCache`.
+
+Public telemetry types live in `src/include/milvus/ClientTelemetry.h` and
+`src/include/milvus/types/TelemetryConfig.h`; `MilvusClientV2.h` includes the former so consumers
+reach `GetTelemetry()` and the manager types from the aggregate header.
 
 Other important layout:
 
@@ -139,6 +146,45 @@ When adding an RPC:
 3. Use `wait_for_status` only for polling-style operations.
 4. Use `InvokeWithRpcTimeout` only when a caller supplies a narrower per-call budget.
 5. Keep endpoint/database values used by cache callbacks consistent with the RPC path.
+
+## Client telemetry
+
+Client telemetry exists on the current master line only; it is absent from the 2.6 maintenance
+branch. Never introduce it, or code conditioned on its APIs, into 2.6 work.
+
+`ConnectParam::WithTelemetryConfig` configures the manager before connection. `TelemetryConfig`
+defaults to enabled, a 10-second heartbeat/metrics window, full sampling (`1.0`), retention of 100
+recent errors, and an empty client ID (the SDK generates a UUID when no stable ID is pinned).
+
+Connection behavior:
+
+- `MilvusConnection::Connect` creates a `ClientTelemetryManager` from the configured
+  `TelemetryConfig`, performs the Milvus `Connect` handshake, attaches the manager to the channel,
+  publishes it with channel/stub state, and only then starts its heartbeat worker.
+- The manager can be reused across database switches, credential resets, and global-cluster
+  failover when the telemetry configuration and connection scope match. The connection scope is the
+  telemetry-reported endpoint (logical global endpoint when applicable) plus a hash of the
+  authorization material; reuse preserves runtime state and a stable client ID without allowing a
+  changed user config to silently retain stale behavior.
+- `MilvusClientV2::GetTelemetry()` exposes the manager for diagnostics and custom command handlers.
+  It is observability wiring, not a second business-RPC path.
+
+Recording and reporting:
+
+- `InvokeWithTelemetry` records selected logical RPCs: `Insert`, `Upsert`, `Delete`, `Query` (also
+  used by Get), `Search`, `HybridSearch`, and `RunAnalyzer`. Retries inside one public call remain
+  one logical operation. Metrics include request/success/error counts and mean/p99/max latency,
+  both globally and per collection.
+- The heartbeat window equals the configured heartbeat interval. Snapshots retain up to
+  `error_max_count` recent errors plus metric windows, exposed via `RecentErrors()` and
+  `MetricsSnapshots()`.
+- The heartbeat sends snapshots and pending command replies to `ClientTelemetryService`. Replies
+  remain queued until a successful heartbeat. Server commands support configuration pushes, metric
+  collection filters, diagnostics, and config queries; custom command handlers can be registered on
+  the manager. Repeated `UNIMPLEMENTED` responses mark the server as unsupported and back off.
+
+Telemetry is best-effort and must never change business RPC success/failure semantics. A telemetry
+configuration or worker failure must not turn a valid Milvus operation into an SDK error.
 
 ## Schema and session timestamp caches
 
