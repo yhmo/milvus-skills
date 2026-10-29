@@ -91,6 +91,28 @@ config-constant definitions). Real-run verification against a Milvus server is
   > skill directory (which is symlinked into the agent's skills dir).
 - **Only touch code blocks.** Never rewrite surrounding prose, headings,
   callouts, tables, images, or citations.
+- **Preserve `<include>` product-branch markup inside code blocks.**
+  `<include target="milvus">...</include>` and
+  `<include target="zilliz">...</include>` are intentional authoring markup for
+  the website generator. They mean the enclosed code is product-specific and
+  must remain available for the Milvus / Zilliz Cloud variants. Never delete,
+  unwrap, merge, or resolve these branches to make a snippet runnable. For
+  local real-run checks, create a temporary harness copy that selects one
+  branch (normally `milvus`), and keep the Feishu source unchanged. When
+  rewriting the enclosing block, preserve the exact `<include>` tags, their
+  targets, and nested code unless the user explicitly asks to change product
+  branching.
+- **Use document-scope clients.** For each language in a document, create and
+  declare the SDK client only in the first code block that uses it; later
+  same-language blocks reuse that client and must not re-create it. Hoist later
+  language dependency statements (`import`, `use`, `using`, `#include`) into
+  that first client-using block. If an operation only switches database, call
+  `use_database(...)` instead of creating a new client. A second client is
+  allowed only for a different cluster or different credentials, and it must
+  use a distinct variable name. Manage client lifetime in the first client
+  block (for example Go `defer cli.Close(ctx)`, C# `using`). Do not confuse
+  language dependency statements with Feishu product-branch `<include>` markup,
+  which remains governed by the rule below.
 - **Preserve existing comments inside code blocks.** When editing a snippet,
   keep its inline comments (e.g. `// Send keepalive pings...`,
   `# 1. Set up a Milvus client`) verbatim unless a comment is factually wrong
@@ -108,7 +130,9 @@ config-constant definitions). Real-run verification against a Milvus server is
 - Within one section the snippets across SDKs must follow the **same logical
   flow and sub-step numbering** as the pymilvus block.
 - Match each document's existing per-SDK style (imports, client initialization,
-  variable naming); do not introduce a new style mid-document.
+  variable naming); do not introduce a new style mid-document. With the
+  document-scope client rule, later blocks omit repeated client creation and
+  reuse the first client variable.
 - **Ignore `DataType.String`**: when an SDK's `DataType` enum contains a `String`
   value (e.g. java `io.milvus.v2.common.DataType.String`), never write it into a
   snippet — use `DataType.VarChar` instead. It is a legacy/internal value.
@@ -544,15 +568,17 @@ Updating a document WITHOUT the corresponding SDK skill risks API deviations
       body — NEVER an entry-point wrapper. Do not write `package main` +
       `func main()` (Go), `#[tokio::main]` + `async fn main()` (Rust),
       `int main()` (C++), or a `main`-bearing class (Java) into any code block.
-      "Self-contained and runnable" means a tester ASSEMBLES an executable by
-      putting the block's reference lines before `main` and the block's logic
-      body inside `main` — the doc block itself stays a fragment. Keep every
-      symbol's import/include/use statement in its own block, even when a
-      multi-block flow (create collection → create index → insert → query)
-      repeats the same imports in every block. Repeated imports across blocks
-      in the same document are expected and correct; do NOT strip them to
-      "deduplicate" — when the harness assembles multiple blocks into one test
-      file, IT deduplicates reference lines, never the doc.
+      "Document-scope runnable" means a tester ASSEMBLES one executable per
+      language by concatenating that language's blocks in document order,
+      putting reference lines before `main` and all logic bodies inside `main`
+      in order — each doc block itself stays a fragment. Keep the SDK client
+      and language dependency statements (`import` / `#include` / `use` /
+      `using`) in the first client-using block for that language. If a later
+      block introduces a new dependency statement, hoist it into that first
+      block instead of repeating dependency regions in every block. Do not
+      confuse these language dependency statements with Feishu
+      `<include target="...">` product-branch markup, which stays in its
+      original branch location.
    - **No function wrapper either (all languages).** The fragment rule above is
       not limited to entry points: never wrap the logic body in any named
       function/method either. A block must be reference lines + bare statements
@@ -591,15 +617,18 @@ Updating a document WITHOUT the corresponding SDK skill risks API deviations
      It collects the constants defined in the document's **Python/Bash** blocks
      (the config baseline), then reports every Java/Go/JavaScript/C++ block that
      *references* such a constant without defining it. **Fix by adding the
-     language-idiomatic definition to the block** (this makes each block
-     self-contained and independently runnable):
+     language-idiomatic definition in the first client-using block for that
+     language** (or the earliest later block that can host it without breaking
+     document order):
      - Java → `String NAME = "value";`
      - Go → `NAME := "value"`
      - JavaScript → `const NAME = "value";`
      - C++ → `const std::string NAME = "value";`
 
-     Insert the definition after the block's import/include region. Re-run the
-     check until 0 missing references.
+     Place it after the hoisted import/include region and before first use.
+     Re-run the check until 0 missing references. The goal is a
+     document-scope runnable sequence, not making every later block
+     independently self-contained.
    - **Consistency check — all languages mirror the pymilvus flow.** For every
      multi-SDK section, manually compare each language block against the Python
      baseline and report (and fix) any divergence:
@@ -707,8 +736,14 @@ Updating a document WITHOUT the corresponding SDK skill risks API deviations
        ```lang blocks in document order), e.g.
        `scripts/fetch_to_md.py <docx> --out sdk-tmp/snippet-run/<doc>.md`.
        Apply the localhost substitution and the `consistency_level=Strong`
-       workaround (both above) to this extracted copy before running. All of
-       `sdk-tmp/snippet-run/` is per-run scratch, cleaned at Step 8.
+       workaround (both above) to this extracted copy before running. For
+       product-branch `<include target="milvus">` /
+       `<include target="zilliz">` markup, keep the Feishu source unchanged and
+       unwrap only the selected branch in the temporary copy. The runner must
+       assemble same-language blocks in document order into one scope and use
+       the single document-scope client created by the first client-using
+       block. All of `sdk-tmp/snippet-run/` is per-run scratch, cleaned at
+       Step 8.
      - **Probe** whether a Milvus server is reachable first:
        `python3 -c "from pymilvus import connections; connections.connect(host='localhost', port=19530, token='root:Milvus'); connections.disconnect('default')"`
        or probe the REST health endpoint `curl -s http://localhost:9091/healthz`.
@@ -801,6 +836,9 @@ Updating a document WITHOUT the corresponding SDK skill risks API deviations
    - sub-step numbering matches across SDKs in the same section;
    - snippets are syntactically plausible (balanced braces/parens, no stray
      placeholders unless intentional);
+   - any original `<include target="milvus">` /
+     `<include target="zilliz">` markup inside code blocks is still present
+     with the same targets and nested branches;
    - no written block has stray blank lines: no blank lines between imports or
      inside data-structure literals, and no runs of 2+ consecutive blank lines
      (`<br/><br/>` runs in the fetched `<pre>`). Re-run

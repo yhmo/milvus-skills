@@ -10,6 +10,16 @@ logic reference — translate its operation flow, keep the sub-step numbering.
 > SDK version or API choice — it lags the Feishu source. Write every snippet
 > against the **latest SDK version** (latest git tag per SDK in `sdk-map.md`).
 
+## Product-branch includes inside code blocks
+
+`<include target="milvus">...</include>` and
+`<include target="zilliz">...</include>` may occur inside Feishu `<pre>` blocks.
+They are authoring directives consumed by the website generator, not invalid
+code. Do not remove, unwrap, merge, or choose one branch when editing the
+Feishu source. Preserve both targets and their nested content exactly. A local
+runner may create a temporary copy that unwraps the `milvus` branch for
+execution.
+
 
 ## Writing into Feishu documents (code-block XML)
 
@@ -44,11 +54,13 @@ wrapper into a doc block in ANY language — no `package main` + `func main()`
 (Go), no `#[tokio::main]` + `async fn main()` (Rust), no `int main()` (C++),
 no `main`-bearing class (Java).
 
-"Self-contained, independently runnable" is verified by ASSEMBLING an
-executable: put the block's reference lines before `main` and the block's
-logic body inside `main`, then build and run. The assembly is the test
-harness's job — the doc block itself must stay a fragment, so readers see the
-logic without boilerplate and can paste the body into their own program.
+"Runnable" is verified by ASSEMBLING a document-scope executable for each
+language: concatenate that language's blocks in document order, keep one shared
+client/connection, hoist later dependency statements into the first
+client-using block, place reference lines before `main`, and place all logic
+bodies inside `main` in order. The assembly is the test harness's job — the doc
+blocks themselves remain fragments, but they are designed to compose at
+document scope rather than to be copied as fully isolated snippets.
 
 The rule covers every function wrapper, not only entry points: a block must
 never be the body of a named function/method either — no
@@ -90,6 +102,31 @@ there and never report them as missing.
   `MilvusClient.create_schema()` + `schema.add_field(...)`.
 - When a section adds cpp/java/... from this baseline, mirror the exact steps and
   numbered comments.
+
+## Document-scope client and dependency rule
+
+For each language within one document, create and declare the SDK client only
+in the **first code block that uses it**. Later blocks of the same language
+reuse that same client variable and must not re-create it.
+
+- Hoist later language dependency statements (`import`, `use`, `using`,
+  `#include`) into that first client-using block when a later block introduces
+  them. This is about language dependency statements, not Feishu
+  `<include target="...">` product-branch markup.
+- If an operation only changes the target database, call `use_database(...)`
+  (or the language-equivalent API) on the existing client instead of creating a
+  new client.
+- A second client is allowed only when the document explicitly connects to a
+  different cluster or uses different credentials; give it a distinct variable
+  name.
+- Put client lifetime management in the first client block: Python may keep the
+  client for the document scope, Go should `defer cli.Close(ctx)`, C# should
+  use `using`/`using var`, Rust/C++ keep the owned client alive for the
+  assembled scope.
+- For real-run verification, concatenate same-language blocks in document order
+  into one scope. For product-branch `<include target="milvus">` /
+  `<include target="zilliz">`, preserve the source and unwrap only the selected
+  branch in a temporary harness copy.
 
 ## milvus-sdk-java — `java`
 
