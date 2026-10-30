@@ -109,10 +109,21 @@ For each language within one document, create and declare the SDK client only
 in the **first code block that uses it**. Later blocks of the same language
 reuse that same client variable and must not re-create it.
 
-- Hoist later language dependency statements (`import`, `use`, `using`,
-  `#include`) into that first client-using block when a later block introduces
-  them. This is about language dependency statements, not Feishu
+- **All dependency statements live in exactly one block per language.** The
+  `import` / `use` / `using` / `#include` statements needed anywhere in the
+  document are hoisted into the first code block that uses the client for that
+  language, and **no later block of that language may contain any such
+  statement** — later blocks are pure logic that reuse the hoisted
+  declarations. This is about language dependency statements, not Feishu
   `<include target="...">` product-branch markup.
+- **"First client-using block" is not necessarily the document's first code
+  block.** A document may open with prose-only, data-prep, or non-client
+  blocks (JSON samples, a pymilvus snippet that only prepares data), and only
+  introduce the SDK client in a later (2nd/3rd) code block. The dependency
+  statements live in whichever block first uses the client for that language.
+  Hoist even types/names used only later (Java `QueryIterator`, Rust
+  `std::collections::HashMap`, Go `entity`/`column`) into that block, so later
+  blocks stay free of declarations.
 - If an operation only changes the target database, call `use_database(...)`
   (or the language-equivalent API) on the existing client instead of creating a
   new client.

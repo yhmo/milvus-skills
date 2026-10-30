@@ -104,15 +104,36 @@ config-constant definitions). Real-run verification against a Milvus server is
   branching.
 - **Use document-scope clients.** For each language in a document, create and
   declare the SDK client only in the first code block that uses it; later
-  same-language blocks reuse that client and must not re-create it. Hoist later
-  language dependency statements (`import`, `use`, `using`, `#include`) into
-  that first client-using block. If an operation only switches database, call
-  `use_database(...)` instead of creating a new client. A second client is
-  allowed only for a different cluster or different credentials, and it must
-  use a distinct variable name. Manage client lifetime in the first client
-  block (for example Go `defer cli.Close(ctx)`, C# `using`). Do not confuse
-  language dependency statements with Feishu product-branch `<include>` markup,
-  which remains governed by the rule below.
+  same-language blocks reuse that client and must not re-create it. If an
+  operation only switches database, call `use_database(...)` instead of
+  creating a new client. A second client is allowed only for a different
+  cluster or different credentials, and it must use a distinct variable name.
+  Manage client lifetime in the first client block (for example Go
+  `defer cli.Close(ctx)`, C# `using`). Do not confuse language dependency
+  statements with Feishu product-branch `<include>` markup, which remains
+  governed by the rule below.
+- **Hoist all language dependency statements into the first client-using
+  block.** For each language in a document, ALL `import` / `#include` / `use` /
+  `using` statements needed anywhere in that document go into a single block:
+  the first code block that uses the client for that language. Once hoisted,
+  **no later block of that language may contain any `import` / `#include` /
+  `use` / `using` statement** — later blocks reuse the hoisted declarations.
+  - **"First client-using block" is NOT necessarily the document's first code
+    block.** A document may open with prose-only, data-prep, or
+    non-client blocks (e.g. a JSON sample or a pymilvus snippet that only
+    prepares data), and only introduce the SDK client in the 2nd or 3rd code
+    block. The dependency statements live in whichever block first uses the
+    client, not in a fixed position.
+  - Hoist even types/names only used later (e.g. Java `QueryIterator`,
+    Rust `std::collections::HashMap`, Go `entity`/`column`) — the first
+    client-using block must import everything the whole document's snippets
+    reference, so later blocks are pure logic.
+  - This keeps the per-block snippets simple and makes document-scope assembly
+    (concatenating blocks in order, reference lines on top) trivially correct:
+    exactly one block per language carries declarations.
+  - Exception: keep `using var client` / `defer cli.Close(ctx)` lifetime
+    statements with the client declaration in the first client-using block;
+    they are part of the client, not a repeatable import.
 - **Preserve existing comments inside code blocks.** When editing a snippet,
   keep its inline comments (e.g. `// Send keepalive pings...`,
   `# 1. Set up a Milvus client`) verbatim unless a comment is factually wrong
@@ -572,11 +593,13 @@ Updating a document WITHOUT the corresponding SDK skill risks API deviations
       language by concatenating that language's blocks in document order,
       putting reference lines before `main` and all logic bodies inside `main`
       in order — each doc block itself stays a fragment. Keep the SDK client
-      and language dependency statements (`import` / `#include` / `use` /
-      `using`) in the first client-using block for that language. If a later
-      block introduces a new dependency statement, hoist it into that first
-      block instead of repeating dependency regions in every block. Do not
-      confuse these language dependency statements with Feishu
+      and ALL language dependency statements (`import` / `#include` / `use` /
+      `using`) needed by the whole document in the first client-using block for
+      that language — which is NOT necessarily the document's first code block
+      (data-prep / JSON-sample blocks may precede it). No later block of that
+      language may contain any dependency statement; a later block that would
+      introduce a new one must instead have it hoisted into that first block.
+      Do not confuse these language dependency statements with Feishu
       `<include target="...">` product-branch markup, which stays in its
       original branch location.
    - **No function wrapper either (all languages).** The fragment rule above is
@@ -629,9 +652,14 @@ Updating a document WITHOUT the corresponding SDK skill risks API deviations
      Re-run the check until 0 missing references. The goal is a
      document-scope runnable sequence, not making every later block
      independently self-contained.
-   - **Consistency check — all languages mirror the pymilvus flow.** For every
-     multi-SDK section, manually compare each language block against the Python
-     baseline and report (and fix) any divergence:
+    - **Consistency check — all languages mirror the pymilvus flow.** For every
+      multi-SDK section, manually compare each language block against the Python
+      baseline and report (and fix) any divergence:
+      - **dependency hoisting** — for each language, `import` / `#include` /
+        `use` / `using` statements may appear in exactly ONE block (the first
+        client-using block); flag and remove any such statement that appears in
+        a later block. Do not let a later block re-import what the first block
+        already provides.
      - **sub-step ordering** — same numbered steps / calls in the same order
        (e.g. if Python does `use_database()` before `create_collection()`, every
        other language should too — Java `databaseName(...)` and C++
@@ -679,6 +707,25 @@ Updating a document WITHOUT the corresponding SDK skill risks API deviations
      missing languages. **Fix order with `docs +update --command block_move_after`
      (move `JavaScript`+`Bash` after `C++`, then `Rust` after `Go`) and re-run
      until 0 failures.** Never leave a group out of canonical order.
+   - **Dependency-hoisting pass (optional, whole-document).** To enforce the
+     document-scope dependency rule across an entire document in one shot — ALL
+     `import`/`#include`/`use`/`using` moved into the first client-using block
+     of each language, repeated client creation removed from later blocks — run
+     the bundled `scripts/hoist_dependencies.py` on the fetched document:
+
+     ```bash
+     lark-cli docs +fetch --doc <docx> --detail with-ids --as user \
+       | python3 scripts/hoist_dependencies.py --doc "<Doc Title>" \
+         --out sdk-tmp/hoist-<doc>
+     ```
+
+     It writes one `<pre>` payload per changed block (plus a `commands.sh`
+     runner) into the output dir. Review the payloads, then apply with
+     `bash sdk-tmp/hoist-<doc>/commands.sh` (with `DOC=<docx>` exported).
+     Re-fetch and re-run the syntax/consistency checks after applying. Use this
+     when a legacy document still duplicates client creation or dependency
+     statements across blocks, or when the user explicitly asks to normalize a
+     document's snippets.
   5. **Run the snippets for real (ONLY when the user explicitly asks, e.g. "在
      Milvus server 上真实运行").** This step is NOT part of the default check —
      it runs only when the request explicitly asks to execute against a Milvus
@@ -833,6 +880,9 @@ Updating a document WITHOUT the corresponding SDK skill risks API deviations
      `scripts/check_block_order.py` on the final fetch and confirm 0 failures
      (see Step 4);
    - imports/client init in each snippet are consistent with the latest API;
+   - per language, `import` / `#include` / `use` / `using` appear in exactly ONE
+     block (the first client-using block); no later block contains a dependency
+     statement;
    - sub-step numbering matches across SDKs in the same section;
    - snippets are syntactically plausible (balanced braces/parens, no stray
      placeholders unless intentional);

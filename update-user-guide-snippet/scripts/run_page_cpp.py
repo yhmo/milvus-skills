@@ -343,8 +343,19 @@ def main():
     includes = list(dict.fromkeys(includes))
     cleaned = []
     for b in bodies:
+        # Strip per-block client creation.
         b = re.sub(
             r"auto\s+client\s*=\s*(?:milvus::)?MilvusClientV2::Create\(\s*\);",
+            "", b)
+        # Strip per-block connection setup so a single shared client in main()
+        # covers every block: `milvus::ConnectParam <x>{...};` followed by
+        # `(auto )?status = client->Connect(<x>);` and (optionally) the status
+        # check that accompanies the connect call (leave later `if (!status.IsOk())`
+        # checks on actual operations intact).
+        b = re.sub(
+            r"milvus::ConnectParam\s+\w+\s*\{[^}]*\}\s*;\s*"
+            r"(?:auto\s+)?status\s*=\s*client->Connect\([^;]*\)\s*;\s*"
+            r"(?:\s*if\s*\(!status\.IsOk\(\)\)\s*\{[^}]*\})?",
             "", b)
         b = re.sub(
             r"util::CheckStatus\(\s*client->Connect\(\s*ConnectParam\([^)]*\)\.WithToken\([^)]*\)\s*\)\s*\)\s*;",
@@ -361,23 +372,75 @@ def main():
     prog += '    if (!status.IsOk()) { return 1; }\n'
     # Flatten per-block scopes; re-declarations of seen names become assignments
     # (C++ forbids redeclaring in the same scope; docs define once and reuse).
-    seen = {"status", "client", "connect_param"}
+    # Variables are grouped by (name, declared type): the first block that
+    # declares (name,type) emits the declaration under the name that name is
+    # currently mapped to; a later block with the SAME (name,type) becomes a
+    # plain assignment; a DIFFERENT type for an already-used name gets a fresh
+    # variable name so the two types can coexist in one scope.
+    declared = {}  # (name, type_key) -> variable name to use
+    # `client` and `status` are created once in main(); later block declarations
+    # of the same (name,type) must reuse them instead of redeclaring.
+    declared[("client", "auto")] = "client"
+    declared[("status", "auto")] = "status"
     DECL = re.compile(
         r"^(?P<indent>\s*)(?:const\s+)?(?:auto\s+(?P<aname>[A-Za-z_][\w$]*)"
         r"|(?P<type>[A-Za-z_][\w:<>\s]*?)\s+(?P<tname>[A-Za-z_][\w$]*))"
         r"\s*(?:=(?!=)\s*(?P<rest>.*))?;?\s*$")
+    auto_type = re.compile(r"^(?:\s*)(?:milvus::)?([A-Za-z_]\w*(?:Request|Response))\s*\(")
+    used = set()  # variable names already declared anywhere
     flat = []
     for b in bodies:
-        for ln in b.split("\n"):
+        lines = b.split("\n")
+        block_map = {}  # original name -> variable name used in this block
+        # Track brace depth so declarations inside explicit `{ ... }` scopes
+        # (which are inherently isolated) are left untouched; only top-level
+        # declarations participate in document-scope flattening.
+        depth = 0
+        for idx, ln in enumerate(lines):
+            depth += ln.count("{") - ln.count("}")
             m = DECL.match(ln)
-            if m:
-                name = m.group("aname") or m.group("tname")
-                if name in seen:
-                    if m.group("rest"):
-                        flat.append(f"{m.group('indent')}{name} = {m.group('rest')}")
-                    continue
-                seen.add(name)
-            flat.append(ln)
+            if not m or depth > 0:
+                continue
+            name = m.group("aname") or m.group("tname")
+            if m.group("aname"):
+                # `auto x = ...` — distinguish by a concrete Request/Response
+                # type if one is visible, else treat as the same "auto" group
+                # (e.g. `auto status = ...` always means milvus::Status).
+                tm = auto_type.search(m.group("rest") or "")
+                type_key = tm.group(1) if tm else "auto"
+            else:
+                type_key = m.group("type").strip()
+            key = (name, type_key)
+            if key in declared:
+                # same (name,type) as before -> reuse that variable: turn a
+                # redeclaration into an assignment, or drop a bare type
+                # declaration (`Type var;`) that has no initializer.
+                var = declared[key]
+                if m.group("rest"):
+                    lines[idx] = re.sub(
+                        rf"^(?P<i>\s*)(?:const\s+)?(?:auto\s+)?{re.escape(name)}\s*(?P<e>=)",
+                        f"\\g<i>{var} \\g<e>", ln, count=1)
+                else:
+                    lines[idx] = ""
+                block_map.setdefault(name, var)
+                continue
+            if any(k[0] == name for k in declared):
+                # same name, different type -> fresh variable name
+                var = f"{name}_{len(declared) + 1}"
+                declared[key] = var
+                block_map[name] = var
+                lines[idx] = ln.replace(name, var, 1)
+                continue
+            # first use of this name -> declare under its own name
+            declared[key] = name
+            block_map[name] = name
+        # rewrite every reference of a renamed/reused name in this block
+        for old, var in block_map.items():
+            if old == var:
+                continue
+            for idx, ln in enumerate(lines):
+                lines[idx] = re.sub(rf"\b{old}\b", var, ln)
+        flat.extend(lines)
         flat.append("")
     bodies = ["\n".join(flat).rstrip()]
 

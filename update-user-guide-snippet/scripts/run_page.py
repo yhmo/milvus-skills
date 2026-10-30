@@ -214,12 +214,19 @@ def main():
         exec(open(seedfile).read(), env)
 
     ok, fail = [], []
+    # strip per-block client/import re-declaration so the document-scope client
+    # created in the prelude is reused (blocks may each declare their own).
+    client_re = re.compile(
+        r"(?:from\s+pymilvus\s+import\s+[^\n]*\n\s*)?"
+        r"client\s*=\s*MilvusClient\(\s*(?:uri\s*=\s*)?"
+        r"[\"']?[^\"'()\n]*[\"']?[^()]*?\)\s*\n?")
     for i, b in enumerate(blocks):
         if not b.strip():
             ok.append((i, "empty"))
             continue
         try:
-            exec(b, env)
+            stripped = client_re.sub("", b, count=1)
+            exec(stripped, env)
             ok.append((i, "OK"))
         except SystemExit:
             # an early exit mid-block truncates the run — treat as a failure
