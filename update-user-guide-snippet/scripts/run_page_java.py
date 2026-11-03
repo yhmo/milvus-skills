@@ -99,6 +99,10 @@ def main():
         bodies.append("\n".join(kept))
     # hoist all unique imports (java requires them at the top)
     first_imports = list(dict.fromkeys(first_imports))
+    # the shared client in main() always uses ConnectConfig; make sure its
+    # import is present even when no block imports it (cross-page fragments).
+    if not any(i.startswith("import io.milvus.v2.client.ConnectConfig;") for i in first_imports):
+        first_imports.insert(0, "import io.milvus.v2.client.ConnectConfig;")
 
     # strip per-block client/connection init so a single shared client can be
     # created in main() — java forbids inner-block shadowing of outer locals.
@@ -128,14 +132,22 @@ def main():
     flat = []
     for b in bodies:
         out = []
+        depth = 0
         for ln in b.split("\n"):
             m = DECL.match(ln)
-            if m and m.group("name") in seen and m.group("type") not in ("return", "new"):
+            # A declaration inside an explicit `{ ... }` scope is block-local
+            # (not visible to later blocks), so it must stay a declaration —
+            # converting it to an assignment would reference an out-of-scope
+            # variable. Compute the depth change from this line after the
+            # DECL check so a declaration that itself opens a scope is seen.
+            if m and depth == 0 and m.group("name") in seen and m.group("type") not in ("return", "new"):
                 out.append(f"{m.group('indent')}{m.group('name')} = {m.group('rest')}")
-                continue
-            if m:
+            elif m and depth == 0:
                 seen.add(m.group("name"))
-            out.append(ln)
+                out.append(ln)
+            else:
+                out.append(ln)
+            depth += ln.count("{") - ln.count("}")
         flat.append("\n".join(out))
     bodies = flat
 

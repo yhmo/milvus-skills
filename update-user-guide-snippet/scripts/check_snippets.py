@@ -43,6 +43,7 @@ LANGS = {
     "cpp": (".cpp", ["g++", "-fsyntax-only", "-std=c++17"]),
     "java": (".java", ["javac"]),
     "rust": (".rs", ["rustc", "--edition", "2021", "--crate-type", "lib"]),
+    "csharp": (".cs", ["true"]),
 }
 
 PRE_RE = re.compile(r'<pre\s+id="[^"]*"(?:\s+[^>]*?)lang="([^"]*)"[^>]*>(.*?)</pre>', re.S)
@@ -56,6 +57,12 @@ IGNORED = {"shell"}
 # Languages whose doc blocks are snippet fragments (reference lines + body) and
 # need a throwaway skeleton assembled before a toolchain can parse them.
 FRAGMENT_LANGS = {"go", "java", "cpp", "rust"}
+
+# C# blocks are validated by the real-run runner (`run_page_csharp.py`), which
+# assembles a full Program.cs and builds/runs it with dotnet. A static parse
+# here would need a project context, so they are reported as skipped-parse and
+# checked by the real run instead.
+PARSE_SKIP_LANGS = {"csharp"}
 
 ENTRY_POINT_RE = {
     # A block that already carries an entry point is legacy/self-contained —
@@ -144,7 +151,7 @@ def wrap_fragment(lang: str, code: str) -> str:
 def normalize_lang(lang: str) -> str:
     return {
         "Python": "python", "Java": "java", "JavaScript": "javascript",
-        "Go": "go", "Bash": "bash", "C++": "cpp",
+        "Go": "go", "Bash": "bash", "C++": "cpp", "C#": "csharp",
     }.get(lang, lang.lower())
 
 
@@ -217,6 +224,9 @@ def main():
         code = decode_block(body)
         if not code.strip():
             results.append((i, lang_raw, "skipped (empty block)", True))
+            continue
+        if lang in PARSE_SKIP_LANGS:
+            results.append((i, lang_raw, "skipped (parse via real-run)", True))
             continue
         ext, cmd = LANGS[lang]
         path = os.path.join(args.out_dir, f"{lang}-{i:02d}{ext}")

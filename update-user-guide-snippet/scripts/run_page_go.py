@@ -109,6 +109,26 @@ def main():
         b = re.sub(r"ctx\s*[:=]=\s*context\.Background\(\)", "", b)
         b = re.sub(r"defer\s+cancel\(\)", "", b)
         b = re.sub(r"defer\s+(?:client|cli)\.Close\(ctx\)", "", b)
+        # drop `package main` / `func main() {` shells so the runner's own
+        # single main() is the only entry point (doc blocks are fragments).
+        lines = b.split("\n")
+        if any(re.match(r"^\s*package\s+main\s*$", l) for l in lines):
+            out = []
+            body_open = False
+            for l in lines:
+                if re.match(r"^\s*package\s+main\s*$", l):
+                    continue
+                if re.match(r"^\s*func\s+main\s*\(\)\s*\{?\s*$", l):
+                    body_open = True
+                    continue
+                out.append(l)
+            # drop the single trailing closing brace of the main shell (only if
+            # nothing follows it and the body was opened by `func main`).
+            while out and not out[-1].strip():
+                out.pop()
+            if body_open and out and re.match(r"^\s*}\s*$", out[-1]):
+                out.pop()
+            b = "\n".join(out)
         cleaned.append(b)
 
     # Balanced-paren cleanup: the regexes above miss multi-line
@@ -160,16 +180,23 @@ def main():
     seen = set()
     flat = []
     SHORT = re.compile(r"^(\s*)([A-Za-z_][\w$]*(?:\s*,\s*[A-Za-z_][\w$]*)*)\s*:=\s*(.*)$")
+    depth = 0
     for b in bodies:
         for ln in b.split("\n"):
             m = SHORT.match(ln)
             if m:
                 names = [n.strip() for n in m.group(2).split(',')]
                 names = [n for n in names if n != "_"]
-                if names and all(nm in seen for nm in names):
+                # Only hoist/reuse top-level (depth 0) `:=` declarations into
+                # `=` assignments. A `:=` inside a `for`/`if` body declares a
+                # block-scoped variable that is NOT visible to later sibling
+                # blocks, so it must stay `:=` (converting it to `=` would
+                # reference an out-of-scope variable).
+                if names and depth == 0 and all(nm in seen for nm in names):
                     flat.append(f"{m.group(1)}{m.group(2)} = {m.group(3)}")
                     continue
                 seen.update(names)
+            depth += ln.count("{") - ln.count("}")
             flat.append(ln)
         flat.append("")
     bodies = [b for b in "\n".join(flat).split("\n// ===") ]  # keep as flat lines list handled below
@@ -180,7 +207,9 @@ def main():
     # declaration the page never contains (analyzer docs do this). Convert the
     # FIRST bare assignment of each name into a `:=` declaration; later bare
     # assignments stay plain (Go: assignment to declared var). Harness-only.
-    declared = {"err", "ctx", "client", "cli"}
+    # Seed with names the SHORT pass already declared at top level so a
+    # redeclaration (`data :=` seen before) is not flipped back to `:=`.
+    declared = {"err", "ctx", "client", "cli"} | {n for n in seen if n not in ("_",)}
     ASSIGN = re.compile(r"^(\s*)([A-Za-z_][\w$]*)\s*=\s*(?!=)(.*)$")
     SHORTD = re.compile(r"^\s*([A-Za-z_][\w$]*)\s*:=\s*")
     MULTI = re.compile(r"^\s*([A-Za-z_][\w$]*(?:\s*,\s*[A-Za-z_][\w$]*)+)\s*:?=.")
@@ -194,6 +223,11 @@ def main():
             if mm:
                 for nm in re.split(r"\s*,\s*", mm.group(1)):
                     declared.add(nm)
+            fixed_lines.append(ln)
+            continue
+        vm = re.match(r"^\s*var\s+([A-Za-z_][\w$]*)\s*(?:[=:]|\s+[A-Za-z_\[\]\*\.]|$)", ln)
+        if vm:
+            declared.add(vm.group(1))
             fixed_lines.append(ln)
             continue
         m = ASSIGN.match(ln)

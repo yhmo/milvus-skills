@@ -37,7 +37,7 @@ import re
 import sys
 
 # canonical order within one multi-SDK group
-CANON = ["Python", "Java", "Go", "Rust", "C++", "JavaScript", "Bash"]
+CANON = ["Python", "Java", "Go", "Rust", "C++", "JavaScript", "C#", "Bash"]
 NORM = {l.lower(): l for l in CANON}
 
 # Languages that are intentionally ignored: never ordered, never validated,
@@ -139,6 +139,11 @@ def main():
         return 0
 
     print(f"=== {args.doc}: {len(groups)} code-block group(s) ===")
+    # Required language set for a group = the languages this document actually
+    # uses in its multi-SDK groups (so a doc without C# is not flagged "missing
+    # C#", while a doc that uses C# in some groups must have it in all of them).
+    multi = [g for g in groups if len(g) > 1]
+    required = sorted({lang for g in multi for _, lang in g}, key=lambda l: CANON.index(l)) if multi else CANON
     failures = 0
     for gi, group in enumerate(groups):
         langs = [lang for _, lang in group]
@@ -147,10 +152,10 @@ def main():
             print(f"  group {gi}: [standalone {langs[0]}] (single-block, order N/A)")
             continue
 
-        exp = CANON
+        exp = required
         order_ok = langs == exp
-        missing = [l for l in CANON if l not in langs]
-        extra = [l for l in langs if l not in CANON]
+        missing = [l for l in required if l not in langs]
+        extra = [l for l in langs if l not in required]
 
         status = []
         if not order_ok:

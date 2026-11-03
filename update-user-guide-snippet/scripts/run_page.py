@@ -178,12 +178,21 @@ def main():
     md = open(page).read()
     blocks = re.findall(r"```python\n(.*?)```", md, re.S)
 
+    # Some pages use a non-standard client variable name (e.g. `milvus_client`);
+    # detect it so the shared document-scope client matches what blocks use.
+    var_re = re.compile(r"^(\w+)\s*=\s*MilvusClient\(", re.M)
+    client_var = "client"
+    for b in blocks:
+        m = var_re.search(b)
+        if m:
+            client_var = m.group(1)
+            break
     prelude = 'from pymilvus import MilvusClient, DataType\n'
-    prelude += f'client = MilvusClient(uri="{URI}", token="{TOKEN}")\n'
+    prelude += f'{client_var} = MilvusClient(uri="{URI}", token="{TOKEN}")\n'
 
     env = {"__name__": "__main__"}
     exec(prelude, env)
-    client = env["client"]
+    client = env[client_var]
     DataType = env["DataType"]
 
     # DROP_FIRST applies only when the page itself creates `my_collection` with
@@ -216,9 +225,11 @@ def main():
     ok, fail = [], []
     # strip per-block client/import re-declaration so the document-scope client
     # created in the prelude is reused (blocks may each declare their own).
+    # Remove ONLY the `client = MilvusClient(...)` init — never the preceding
+    # `from pymilvus import ...` line (it may import names used later in the
+    # block, e.g. Function/FunctionType for BM25).
     client_re = re.compile(
-        r"(?:from\s+pymilvus\s+import\s+[^\n]*\n\s*)?"
-        r"client\s*=\s*MilvusClient\(\s*(?:uri\s*=\s*)?"
+        rf"{re.escape(client_var)}\s*=\s*MilvusClient\(\s*(?:uri\s*=\s*)?"
         r"[\"']?[^\"'()\n]*[\"']?[^()]*?\)\s*\n?")
     for i, b in enumerate(blocks):
         if not b.strip():

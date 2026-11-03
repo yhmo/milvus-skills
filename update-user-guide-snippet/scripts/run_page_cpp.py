@@ -383,9 +383,9 @@ def main():
     declared[("client", "auto")] = "client"
     declared[("status", "auto")] = "status"
     DECL = re.compile(
-        r"^(?P<indent>\s*)(?:const\s+)?(?:auto\s+(?P<aname>[A-Za-z_][\w$]*)"
+        r"^(?P<indent>\s*)(?:const\s+)?(?:auto\s*&?\s+(?P<aname>[A-Za-z_][\w$]*)"
         r"|(?P<type>[A-Za-z_][\w:<>\s]*?)\s+(?P<tname>[A-Za-z_][\w$]*))"
-        r"\s*(?:=(?!=)\s*(?P<rest>.*))?;?\s*$")
+        r"\s*(?:=(?!=)\s*(?P<rest>.*)|\((?P<ctor>[^)]*)\))?;?\s*$")
     auto_type = re.compile(r"^(?:\s*)(?:milvus::)?([A-Za-z_]\w*(?:Request|Response))\s*\(")
     used = set()  # variable names already declared anywhere
     flat = []
@@ -397,10 +397,17 @@ def main():
         # declarations participate in document-scope flattening.
         depth = 0
         for idx, ln in enumerate(lines):
-            depth += ln.count("{") - ln.count("}")
             m = DECL.match(ln)
+            # Track brace depth so declarations inside explicit `{ ... }` scopes
+            # (which are inherently isolated) are left untouched; only top-level
+            # declarations participate in document-scope flattening. Compute the
+            # depth change from this line AFTER the DECL check so a declaration
+            # that itself opens a scope (`std::vector<...> indexes = {`) is still
+            # seen as a top-level declaration.
             if not m or depth > 0:
+                depth += ln.count("{") - ln.count("}")
                 continue
+            depth += ln.count("{") - ln.count("}")
             name = m.group("aname") or m.group("tname")
             if m.group("aname"):
                 # `auto x = ...` — distinguish by a concrete Request/Response
@@ -416,9 +423,20 @@ def main():
                 # redeclaration into an assignment, or drop a bare type
                 # declaration (`Type var;`) that has no initializer.
                 var = declared[key]
-                if m.group("rest"):
+                if m.group("ctor"):
+                    # `Type var(args);` redeclared -> `var = Type(args);`
+                    type_ = m.group("type").strip()
+                    args = m.group("ctor")
                     lines[idx] = re.sub(
-                        rf"^(?P<i>\s*)(?:const\s+)?(?:auto\s+)?{re.escape(name)}\s*(?P<e>=)",
+                        rf"^(?P<i>\s*)(?:const\s+)?{re.escape(type_)}\s+{re.escape(name)}\s*\([^)]*\)\s*;",
+                        f"\\g<i>{var} = {type_}({args});", ln, count=1)
+                elif m.group("rest"):
+                    # strip the full declaration prefix (`const`/`auto` or an
+                    # explicit type) so the redeclaration becomes an assignment
+                    # to the reused variable, e.g.
+                    #   `milvus::CollectionSchemaPtr schema = ...;` -> `schema = ...;`
+                    lines[idx] = re.sub(
+                        rf"^(?P<i>\s*)(?:(?:const\s+)?(?:auto\s*&?\s+)|(?:const\s+)?[A-Za-z_][\w:<>\s]*?\s+){re.escape(name)}\s*(?P<e>=)",
                         f"\\g<i>{var} \\g<e>", ln, count=1)
                 else:
                     lines[idx] = ""
