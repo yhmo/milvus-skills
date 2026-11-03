@@ -14,6 +14,17 @@ fetch (XML content or JSON envelope), computes the rewritten `<pre>` blocks, and
 writes the `lark-cli docs +update --command block_replace` payloads to a
 directory (one file per block, plus a `commands.sh` runner).
 
+> **Scope = one workflow, not the whole document.** This script hoists within a
+> SINGLE workflow scope (it treats the whole fetched document as one scope).
+> When a document contains MULTIPLE independent workflows — each with its own
+> client, verified as its own standalone program — run this helper once PER
+> WORKFLOW (feed it a fetch containing only that workflow's blocks), so each
+> workflow's first client-using block carries that workflow's own
+> `import`/`#include`/`use`/`using` statements. Do NOT hoist one document's
+> deps into the first workflow and leave later workflows import-less — a later
+> workflow whose first block creates a client without imports is a broken
+> standalone program.
+
 Usage:
   lark-cli docs +fetch --doc <docx> --detail with-ids --as user \
     | python3 hoist_dependencies.py --doc "Query" --out sdk-tmp/hoist-query

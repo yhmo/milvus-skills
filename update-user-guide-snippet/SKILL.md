@@ -112,6 +112,26 @@ config-constant definitions). Real-run verification against a Milvus server is
   `defer cli.Close(ctx)`, C# `using`). Do not confuse language dependency
   statements with Feishu product-branch `<include>` markup, which remains
   governed by the rule below.
+  - **Independent workflows are separate scopes.** A document may contain
+    multiple independent workflows that each run standalone — e.g. "Use
+    AutoID" and "Use manual IDs" in the Primary Field & AutoID doc, each
+    with its own Step 1/2 sequence on a different collection. Do NOT treat
+    the whole document as one scope for the client rule: every workflow's
+    first client-using block must create and declare the client (with its
+    lifetime statements) again, and only blocks within the same workflow
+    reuse that client. Stripping the client from a later workflow's first
+    block because an earlier workflow already declared one leaves that
+    workflow's snippets referencing an undefined client (e.g. Go `cli`/`ctx`).
+  - **Dependency hoisting is scoped PER WORKFLOW, not per document.** Because
+    each independent workflow is verified as its OWN runnable program (its own
+    assembly), it must be self-sufficient: every workflow's first client-using
+    block carries the `import` / `#include` / `use` / `using` statements that
+    workflow needs, and later blocks within that workflow reuse them. Do NOT
+    hoist all of a document's deps into the first workflow and strip the other
+    workflows' imports — a later independent workflow whose first block creates
+    a client but has no imports is a broken standalone program (e.g.
+    `MilvusClient` / `MilvusClientV2` / the `milvus::` namespace undefined).
+    Deps are NOT shared across workflows; each workflow hoists its own.
 - **Hoist all language dependency statements into the first client-using
   block.** For each language in a document, ALL `import` / `#include` / `use` /
   `using` statements needed anywhere in that document go into a single block:
@@ -124,6 +144,12 @@ config-constant definitions). Real-run verification against a Milvus server is
     prepares data), and only introduce the SDK client in the 2nd or 3rd code
     block. The dependency statements live in whichever block first uses the
     client, not in a fixed position.
+  - **Scope = one workflow, not the whole document.** When a document holds
+    multiple independent workflows (each with its own client), apply the
+    hoist per workflow: each workflow's first client-using block carries ALL
+    deps that workflow needs, and no other block of that workflow contains a
+    dependency statement. Do not pull later workflows' imports into an earlier
+    workflow's block.
   - Hoist even types/names only used later (e.g. Java `QueryIterator`,
     Rust `std::collections::HashMap`, Go `entity`/`column`) — the first
     client-using block must import everything the whole document's snippets

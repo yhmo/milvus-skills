@@ -100,6 +100,13 @@ there and never report them as missing.
 
 - Operations are plain `client.<method>(...)` calls; schema built with
   `MilvusClient.create_schema()` + `schema.add_field(...)`.
+- **`create_schema` is a `@classmethod`** (`pymilvus/milvus_client/base.py`) —
+  prefer the class-level call `schema = MilvusClient.create_schema(...)` (or
+  `AsyncMilvusClient.create_schema(...)`) whenever a block only builds a schema
+  and does not yet call an instance method. In a schema-only step, do NOT
+  declare `client = MilvusClient(...)` — instantiate the client only in the
+  first block that actually uses the instance (mirrors Java/Go/Rust/C++/JS/C#
+  which build the schema client-free).
 - When a section adds cpp/java/... from this baseline, mirror the exact steps and
   numbered comments.
 
@@ -109,13 +116,21 @@ For each language within one document, create and declare the SDK client only
 in the **first code block that uses it**. Later blocks of the same language
 reuse that same client variable and must not re-create it.
 
-- **All dependency statements live in exactly one block per language.** The
-  `import` / `use` / `using` / `#include` statements needed anywhere in the
-  document are hoisted into the first code block that uses the client for that
-  language, and **no later block of that language may contain any such
-  statement** — later blocks are pure logic that reuse the hoisted
-  declarations. This is about language dependency statements, not Feishu
-  `<include target="...">` product-branch markup.
+- **All dependency statements live in exactly one block per workflow scope.**
+  The `import` / `use` / `using` / `#include` statements a workflow needs are
+  hoisted into that workflow's first code block that uses the client, and
+  **no later block of that workflow may contain any such statement** — later
+  blocks are pure logic that reuse the hoisted declarations. This is about
+  language dependency statements, not Feishu `<include target="...">`
+  product-branch markup.
+- **Independent workflows hoist their own deps.** When a document contains
+  multiple independent workflows (each with its own client), each workflow is
+  verified as its OWN runnable program, so its first client-using block must
+  carry the imports that workflow needs. Do NOT hoist everything into the first
+  workflow and leave later workflows import-less — a workflow whose first block
+  creates a client without the matching imports (e.g. `MilvusClient`,
+  `MilvusClientV2`, the `milvus::` namespace) is a broken standalone program.
+  Deps are not shared across workflows.
 - **"First client-using block" is not necessarily the document's first code
   block.** A document may open with prose-only, data-prep, or non-client
   blocks (JSON samples, a pymilvus snippet that only prepares data), and only
@@ -134,6 +149,12 @@ reuse that same client variable and must not re-create it.
   client for the document scope, Go should `defer cli.Close(ctx)`, C# should
   use `using`/`using var`, Rust/C++ keep the owned client alive for the
   assembled scope.
+- **Only instantiate the client where it is actually used.** A schema-only block
+  must not declare a client instance: use the pymilvus classmethod form
+  `schema = MilvusClient.create_schema(...)` (a `@classmethod`, no instance
+  needed) so the block stays consistent with the other SDKs that build the
+  schema client-free; declare the instance client in the first block that
+  actually calls an instance method.
 - For real-run verification, concatenate same-language blocks in document order
   into one scope. For product-branch `<include target="milvus">` /
   `<include target="zilliz">`, preserve the source and unwrap only the selected
@@ -157,6 +178,13 @@ reuse that same client variable and must not re-create it.
 - Requests are Lombok builders: `XxxReq.builder().field(...).build()`, passed to
   `client.method(req)`. Enums live in `io.milvus.v2.common.*` (e.g.
   `DataType.Int64`, `IndexParam.IndexType`).
+- **Build schema with `CreateCollectionReq.CollectionSchema.builder()...build()`**
+  — that is the recommended way (e.g.
+  `CreateCollectionReq.CollectionSchema.builder().build()` then
+  `schema.addField(AddFieldReq.builder()...build())`). `MilvusClientV2.CreateSchema()`
+  is only a static shortcut that returns an EMPTY schema; do not prefer it.
+  The old instance method `client.createSchema()` is `@Deprecated` since SDK
+  v2.5.9 — never use it.
 - **Never use `DataType.String`** — it is a legacy/internal enum value. Use
   `DataType.VarChar` for string fields in java snippets.
 - Verify class/package names against the latest `milvus-sdk-java` tag

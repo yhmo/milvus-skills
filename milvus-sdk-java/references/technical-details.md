@@ -55,6 +55,17 @@ Async validation failures return exceptionally completed futures; retry backoff 
 
 Keep public facade methods thin. Domain validation and protobuf mapping belong in services or V2 utility classes. Cross-service orchestration such as `optimize()` may remain in the facade.
 
+> **Build schema with the builder, not the facade shortcut.** The recommended way
+> to create a schema is `CreateCollectionReq.CollectionSchema.builder()...build()`
+> (then `schema.addField(AddFieldReq.builder()...build())`).
+> `MilvusClientV2.CreateSchema()` is only a static shortcut returning an EMPTY
+> schema (`CollectionService.createSchema()` just does
+> `CreateCollectionReq.CollectionSchema.builder().build()`); prefer the builder.
+> The instance method `client.createSchema()` is `@Deprecated` since SDK v2.5.9
+> — never use it. In a schema-only block, building the schema needs no client
+> instance at all (mirrors pymilvus `MilvusClient.create_schema(...)`);
+> instantiate the client only where an instance method is actually used.
+
 ## Connection and retry behavior
 
 `ClientUtils` builds channels and configures authorization metadata, request identifiers, TLS, authority override, proxy routing, keepalive, message limits, and prechecks. `MilvusClientV2.connect()` performs the Milvus connect handshake and installs the returned identifier interceptor on later RPCs.

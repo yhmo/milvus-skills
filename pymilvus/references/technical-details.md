@@ -46,6 +46,8 @@ Main files:
 
 `MilvusClient` is the preferred layer for new high-level user-facing SDK features. It uses `ConnectionConfig` and `ConnectionManager` to obtain a handler, then delegates lower-level RPC work to the handler.
 
+Schema creation does not require a client instance: `BaseMilvusClient.create_schema` (`pymilvus/milvus_client/base.py`) is a `@classmethod`, so prefer the class-level call `schema = MilvusClient.create_schema(...)` (or `AsyncMilvusClient.create_schema(...)`) whenever the snippet only builds a schema and has not yet connected. Defer instantiating the client to the first block that actually calls an instance method.
+
 `AsyncMilvusClient` should mirror sync client behavior where possible, but do not assume every sync method exists asynchronously. Check current method coverage before adding async changes.
 
 ## Connection and transport layer
