@@ -18,13 +18,14 @@ from pathlib import Path
 from typing import Any
 
 
-SUPPORTED_SDKS = ("pymilvus", "java", "cpp", "csharp", "rust")
+SUPPORTED_SDKS = ("pymilvus", "java", "cpp", "csharp", "rust", "go")
 SOURCE_ROOTS = {
     "pymilvus": ("pymilvus/milvus_client",),
     "java": ("sdk-core/src/main/java",),
     "cpp": ("src/include/milvus", "src/impl"),
     "csharp": ("Milvus.Client.V2",),
     "rust": ("src/v2",),
+    "go": ("client/milvusclient", "client/entity"),
 }
 SOURCE_SUFFIXES = {
     "pymilvus": ".py",
@@ -32,6 +33,7 @@ SOURCE_SUFFIXES = {
     "cpp": (".h", ".cpp"),
     "csharp": ".cs",
     "rust": ".rs",
+    "go": ".go",
 }
 TYPE_BLOCK_CACHE: dict[tuple[str, str, tuple[str, ...]], dict[str, Any] | None] = {}
 
@@ -74,6 +76,7 @@ def strip_comments(source: str) -> str:
         if state == "code":
             if char == "/" and nxt == "/":
                 state = "line"
+                output.append("  ")
                 index += 2
                 continue
             if char == "/" and nxt == "*":
@@ -81,7 +84,7 @@ def strip_comments(source: str) -> str:
                 output.append("  ")
                 index += 2
                 continue
-            if char in "\"'":
+            if char in "\"\'`":
                 state = "string"
                 quote = char
             output.append(char)
@@ -122,7 +125,7 @@ def matching_brace(source: str, opening: int) -> int:
             elif char == quote:
                 quote = ""
             continue
-        if char in "\"'":
+        if char in "\"\'`":
             quote = char
         elif char == "{":
             depth += 1
@@ -147,7 +150,7 @@ def matching_paren(source: str, opening: int) -> int:
             elif char == quote:
                 quote = ""
             continue
-        if char in "\"'":
+        if char in "\"\'`":
             quote = char
         elif char == "(":
             depth += 1
@@ -259,6 +262,10 @@ def type_declaration(sdk: str, type_name: str) -> re.Pattern[str]:
         )
     if sdk == "rust":
         return re.compile(rf"\bstruct\s+{escaped}\b[^;{{]*\{{")
+    if sdk == "go":
+        return re.compile(
+            rf"\btype\s+{escaped}\s+(?:interface|struct)\b[^;{{]*\{{"
+        )
     raise ValueError(sdk)
 
 
@@ -284,9 +291,11 @@ def find_type_block(
     cache_key = (sdk, type_name, tuple(sorted(sources)))
     if cache_key in TYPE_BLOCK_CACHE:
         return TYPE_BLOCK_CACHE[cache_key]
-    if sdk in {"cpp", "rust"}:
+    if sdk in {"cpp", "rust", "go"}:
         alias_pattern = re.compile(
             rf"\b(?:pub\s+type|using)\s+{re.escape(type_name)}\s*=\s*(?P<target>[^;]+);"
+            if sdk in {"cpp", "rust"}
+            else rf"\btype\s+{re.escape(type_name)}\s*=\s*(?P<target>[^;\n]+)"
         )
         for content in sources.values():
             alias = alias_pattern.search(content)
@@ -487,6 +496,62 @@ def parse_rust_members(block: dict[str, Any]) -> tuple[list[dict[str, Any]], lis
     return fields, fields
 
 
+def parse_go_members(block: dict[str, Any]) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    fields: list[dict[str, Any]] = []
+    accessors: list[dict[str, Any]] = []
+    for line_number, line in enumerate(block["text"].splitlines(), block["line"]):
+        text = line.strip()
+        if not text or text.startswith("type ") or text in {"{", "}"}:
+            continue
+        method = re.match(
+            r"(?P<name>[A-Za-z_][A-Za-z0-9_]*)\s*\((?P<params>[^)]*)\)\s*(?P<ret>[^;{]*)?$",
+            text,
+        )
+        if method:
+            ret = method.group("ret")
+            accessors.append(
+                {
+                    "name": method.group("name"),
+                    "type": " ".join(ret.split()) if ret and ret.strip() else "void",
+                    "line": line_number,
+                }
+            )
+            continue
+        field = re.match(r"(?P<name>[A-Za-z_][A-Za-z0-9_]*)\s+(?P<type>.+)$", text)
+        if field:
+            fields.append(
+                {
+                    "name": field.group("name"),
+                    "type": field.group("type").strip(),
+                    "default": None,
+                    "line": line_number,
+                }
+            )
+    return fields, accessors
+
+
+def go_builder_accessors(block: dict[str, Any], sources: dict[str, str]) -> list[dict[str, Any]]:
+    accessors: list[dict[str, Any]] = []
+    content = sources.get(block.get("file", ""), "")
+    for match in re.finditer(
+        r"\bfunc\s*\(\s*\w+\s+\*\w+\s*\)\s+(?P<name>With[A-Z][A-Za-z0-9_]*)\s*\((?P<params>[^)]*)\)",
+        content,
+    ):
+        param_names = []
+        for part in split_top_level(match.group("params")):
+            tokens = split_top_level(part.strip(), separator=" ")
+            if len(tokens) >= 2:
+                param_names.append(tokens[0])
+        accessors.append(
+            {
+                "name": match.group("name"),
+                "type": "(" + ", ".join(param_names) + ")",
+                "line": content.count("\n", 0, match.start()) + 1,
+            }
+        )
+    return accessors
+
+
 def java_builder_defaults(block: dict[str, Any]) -> dict[str, str]:
     builder_match = re.search(
         r"\b(?:public\s+)?(?:static\s+)?(?:final\s+)?class\s+\w*Builder\b[^;{]*\{",
@@ -556,6 +621,15 @@ def type_members(
         fields, accessors = parse_cpp_members(block)
     elif sdk == "rust":
         fields, accessors = parse_rust_members(block)
+    elif sdk == "go":
+        fields, accessors = parse_go_members(block)
+        if "interface" in block["declaration"] and type_name:
+            concrete_name = type_name[0].lower() + type_name[1:]
+            concrete = find_type_block(sdk, concrete_name, sources)
+            if concrete is not None:
+                concrete_fields, _ = parse_go_members(concrete)
+                fields.extend(concrete_fields)
+            accessors.extend(go_builder_accessors(block, sources))
     else:
         raise ValueError(sdk)
     if sdk == "java":
@@ -592,6 +666,7 @@ def method_block(
         "csharp": rf"\bpublic\s+(?:async\s+)?[^;{{}}]*?\b{name}\s*\(",
         "rust": rf"\bpub\s+(?:async\s+)?fn\s+{name}\s*\(",
         "cpp": rf"\b(?:MilvusClientV2Impl|MilvusClientV2)::\s*{name}\s*\(",
+        "go": rf"\bfunc\s+\([^)]*\)\s+{name}\s*\(",
     }
     pattern = patterns.get(sdk)
     if pattern is None:
@@ -640,7 +715,9 @@ def generic_validation_signals(block: dict[str, Any] | None, role: str) -> list[
     validation_pattern = re.compile(
         r"\b(?:throw|raise|assert|check|validate|ensure|require|ok_or|"
         r"Objects\.requireNonNull|isNullOrEmpty|isNullOrWhiteSpace|isBlank|"
-        r"Error::validation|IllegalArgumentException|ArgumentNullException)\b",
+        r"Error::validation|IllegalArgumentException|ArgumentNullException|"
+        r"errors\.New|errors\.Newf|errors\.Wrap|fmt\.Errorf|CheckRPCCall|"
+        r"merr\.[A-Za-z]+|PanicIfEmpty)\b",
         re.I,
     )
     for offset, text in enumerate(lines):

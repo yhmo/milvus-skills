@@ -15,7 +15,7 @@ from pathlib import Path
 from typing import Any
 
 
-SUPPORTED_SDKS = ("pymilvus", "java", "cpp", "csharp", "rust")
+SUPPORTED_SDKS = ("pymilvus", "java", "cpp", "csharp", "rust", "go")
 SUBMODULE_PATHS = {
     "java": "sdk-core/src/main/milvus-proto",
     "rust": "milvus-proto",
@@ -84,6 +84,25 @@ def proto_files_from_github_archive(commit: str) -> list[dict[str, Any]]:
     return files
 
 
+def resolve_proto_commit_via_gh(reference: str) -> str:
+    completed = subprocess.run(
+        ["gh", "api", f"repos/milvus-io/milvus-proto/commits/{reference}", "--jq", ".sha"],
+        check=False,
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+    )
+    if completed.returncode != 0:
+        raise SystemExit(
+            f"error: cannot resolve milvus-proto commit {reference}: "
+            f"{completed.stderr.strip() or completed.stdout.strip()}"
+        )
+    sha = completed.stdout.strip()
+    if not re.fullmatch(r"[0-9a-f]{40}", sha):
+        raise SystemExit(f"error: unexpected commit response for {reference}: {sha}")
+    return sha
+
+
 def write_json_atomic(path: Path, value: dict[str, Any]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     fd, temporary_name = tempfile.mkstemp(prefix=f".{path.name}.", dir=path.parent)
@@ -133,7 +152,37 @@ def resolve(sdk: str, repo: Path, ref: str) -> dict[str, Any]:
         )
         return base
 
-    if sdk == "cpp":
+    if sdk == "go":
+        gomod = run_git(repo, "show", f"{ref}:client/go.mod").stdout
+        dependency = re.search(
+            r"^\s*github\.com/milvus-io/milvus-proto/go-api/v2\s+(v\S+)",
+            gomod,
+            re.M,
+        )
+        if dependency is None:
+            raise SystemExit(
+                "error: milvus-proto/go-api/v2 dependency not found in client/go.mod"
+            )
+        version = dependency.group(1)
+        suffix = re.search(r"-([0-9a-f]{12,40})$", version)
+        if suffix is not None:
+            prefix = suffix.group(1)
+            proto_commit = (
+                prefix if len(prefix) == 40 else resolve_proto_commit_via_gh(prefix)
+            )
+        else:
+            proto_commit = resolve_proto_commit_via_gh(version)
+        base.update(
+            {
+                "anchor_kind": "go-module",
+                "anchor_path": "client/go.mod",
+                "proto_repo": "https://github.com/milvus-io/milvus-proto.git",
+                "proto_artifact": "github-archive",
+                "proto_version": version,
+                "proto_commit": proto_commit,
+            }
+        )
+    elif sdk == "cpp":
         cmake = run_git(repo, "show", f"{ref}:cmake/MilvusProtoGen.cmake").stdout
         proto_commit = parse_cmake_proto_commit(cmake)
         base.update(

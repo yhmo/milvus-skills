@@ -29,7 +29,7 @@ except ModuleNotFoundError:
     _behavior_spec.loader.exec_module(extract_behavior)
 
 
-SUPPORTED_SDKS = ("pymilvus", "java", "cpp", "csharp", "rust")
+SUPPORTED_SDKS = ("pymilvus", "java", "cpp", "csharp", "rust", "go")
 SESSION_TYPE_NAMES = {
     "pymilvus": "MilvusClientSession",
     "java": "MilvusClientV2Session",

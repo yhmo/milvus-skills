@@ -28,7 +28,7 @@ except ModuleNotFoundError:
     _behavior_spec.loader.exec_module(extract_behavior)
 
 
-SUPPORTED_SDKS = ("pymilvus", "java", "cpp", "csharp", "rust")
+SUPPORTED_SDKS = ("pymilvus", "java", "cpp", "csharp", "rust", "go")
 TELEMETRY_TYPE_NAMES = {
     "java": {"config": "TelemetryConfig", "manager": "ClientTelemetryManager"},
     "cpp": {"config": "TelemetryConfig", "manager": "ClientTelemetryManager"},

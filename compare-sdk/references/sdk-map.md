@@ -14,6 +14,7 @@ never mutate a worktree.
 | cpp | milvus-io/milvus-sdk-cpp | `$HOME/work/git-go/milvus-sdk-cpp` | `source` | `source/master` |
 | csharp | milvus-io/milvus-sdk-csharp | `$HOME/work/git-go/milvus-sdk-csharp` | `source` | `source/main` |
 | rust | milvus-io/milvus-sdk-rust | `$HOME/work/git-go/milvus-sdk-rust` | `source` | `source/main` |
+| go | milvus-io/milvus (`client/`) | `$HOME/work/git-go/milvus` | `source` | `source/master` |
 
 All five upstream remotes use the same `source` remote name pointing at
 `milvus-io/<repo>`. Confirm with `git remote -v` before relying on it.
@@ -34,13 +35,13 @@ report and ask before cloning when no checkout exists.
 
 Map the user's branch keyword to the actual remote branch ref:
 
-| Keyword | pymilvus | java | cpp | csharp | rust |
-|---|---|---|---|---|---|
-| `master` | `source/master` | `source/master` | `source/master` | `source/main` (dev line) | `source/main` (dev line; some docs call it `master`) |
-| `main` | `source/master` | `source/master` | `source/main` | `source/main` | `source/main` |
-| `3.0` | `source/3.0` | `source/3.0` | `source/master` (no dedicated `3.0` branch) | `source/main` | `source/main` (no dedicated `3.0` branch) |
-| `2.6` | `source/2.6` | `source/2.6` | `source/2.6` | `source/2.6` | `source/2.6` |
-| `2.5` | `source/2.5` | `source/2.5` | `source/2.5` | — | `source/2.5` |
+| Keyword | pymilvus | java | cpp | csharp | rust | go |
+|---|---|---|---|---|---|---|
+| `master` | `source/master` | `source/master` | `source/master` | `source/main` (dev line) | `source/main` (dev line; some docs call it `master`) | `source/master` |
+| `main` | `source/master` | `source/master` | `source/main` | `source/main` | `source/main` | `source/master` |
+| `3.0` | `source/3.0` | `source/3.0` | `source/master` (no dedicated `3.0` branch) | `source/main` | `source/main` (no dedicated `3.0` branch) | `source/3.0` |
+| `2.6` | `source/2.6` | `source/2.6` | `source/2.6` | `source/2.6` | `source/2.6` | `source/2.6` |
+| `2.5` | `source/2.5` | `source/2.5` | `source/2.5` | — | `source/2.5` | `source/2.5` |
 
 Rust `2.5` predates the V2 client surface listed in this map. If a comparison
 targets that line, report that the V2 facade is unavailable instead of trying to
@@ -64,14 +65,14 @@ git -C <repo> rev-parse refs/remotes/source/<branch>
 
 ## Source paths per SDK
 
-| Surface | pymilvus | java | cpp | csharp | rust |
-|---|---|---|---|---|---|
-| V2 facade | `pymilvus/milvus_client/milvus_client.py` (class `MilvusClient`) | `sdk-core/src/main/java/io/milvus/v2/client/MilvusClientV2.java` | `src/include/milvus/MilvusClientV2.h` | `Milvus.Client.V2/MilvusClientV2.cs` + `Milvus.Client.V2/MilvusClientV2.*.cs` partials (class `MilvusClientV2`) | `src/v2/client.rs` + `src/v2/client/*.rs` |
-| Request classes | (function parameters in the facade) | `sdk-core/src/main/java/io/milvus/v2/service/**/request/*.java` | `src/include/milvus/request/*.h` | `Milvus.Client.V2/Request/**/*Req.cs` | `src/v2/request/*.rs` |
-| Response classes | (dict keys in the return statements) | `sdk-core/src/main/java/io/milvus/v2/service/**/response/*.java` | `src/include/milvus/response/*.h` | `Milvus.Client.V2/Response/**/*Resp.cs` | `src/v2/response/*.rs` |
-| DataType enum | skipped (see Step 8) | `sdk-core/src/main/java/io/milvus/v2/common/DataType.java` | `src/include/milvus/types/DataType.h` | `Milvus.Client.V2/Types/DataType.cs` | `src/v2/types/common.rs` |
-| IndexType enum | skipped (see Step 8) | `sdk-core/src/main/java/io/milvus/param/IndexType.java` | `src/include/milvus/types/IndexType.h` | `Milvus.Client.V2/Types/IndexType.cs` | `src/v2/types/index.rs` |
-| Proto anchor (Step 6) | no vendored `.proto`; use generated `pymilvus/grpc_gen/*.py` descriptors | submodule `sdk-core/src/main/milvus-proto` (`proto/milvus.proto`) | `cmake/MilvusProtoGen.cmake` `PROTO_COMMIT` -> `milvus-io/milvus-proto` | submodule `Protos` (`proto/milvus.proto`) | submodule `milvus-proto` (`proto/milvus.proto`) |
+| Surface | pymilvus | java | cpp | csharp | rust | go |
+|---|---|---|---|---|---|---|
+| V2 facade | `pymilvus/milvus_client/milvus_client.py` (class `MilvusClient`) | `sdk-core/src/main/java/io/milvus/v2/client/MilvusClientV2.java` | `src/include/milvus/MilvusClientV2.h` | `Milvus.Client.V2/MilvusClientV2.cs` + `Milvus.Client.V2/MilvusClientV2.*.cs` partials (class `MilvusClientV2`) | `src/v2/client.rs` + `src/v2/client/*.rs` | `client/milvusclient/*.go` (methods on `*Client`, excluding `*_test.go`) |
+| Request classes | (function parameters in the facade) | `sdk-core/src/main/java/io/milvus/v2/service/**/request/*.java` | `src/include/milvus/request/*.h` | `Milvus.Client.V2/Request/**/*Req.cs` | `src/v2/request/*.rs` | `client/milvusclient/*_options.go` (`XxxOption` interface + concrete `xxxOption` struct + `NewXxxOption`/`WithXxx` builders) |
+| Response classes | (dict keys in the return statements) | `sdk-core/src/main/java/io/milvus/v2/service/**/response/*.java` | `src/include/milvus/response/*.h` | `Milvus.Client.V2/Response/**/*Resp.cs` | `src/v2/response/*.rs` | `client/milvusclient/*.go` (e.g. `ResultSet`, `InsertResult`) + `client/entity/*.go` |
+| DataType enum | skipped (see Step 8) | `sdk-core/src/main/java/io/milvus/v2/common/DataType.java` | `src/include/milvus/types/DataType.h` | `Milvus.Client.V2/Types/DataType.cs` | `src/v2/types/common.rs` | skipped (pymilvus present) |
+| IndexType enum | skipped (see Step 8) | `sdk-core/src/main/java/io/milvus/param/IndexType.java` | `src/include/milvus/types/IndexType.h` | `Milvus.Client.V2/Types/IndexType.cs` | `src/v2/types/index.rs` | skipped (pymilvus present) |
+| Proto anchor (Step 6) | no vendored `.proto`; use generated `pymilvus/grpc_gen/*.py` descriptors | submodule `sdk-core/src/main/milvus-proto` (`proto/milvus.proto`) | `cmake/MilvusProtoGen.cmake` `PROTO_COMMIT` -> `milvus-io/milvus-proto` | submodule `Protos` (`proto/milvus.proto`) | submodule `milvus-proto` (`proto/milvus.proto`) | `client/go.mod` `milvus-proto/go-api/vX` version (pseudo-version commit resolved via `gh api`; `anchor_kind=go-module`) |
 
 ## Internal mechanisms (Step 7)
 
@@ -89,6 +90,7 @@ by symbol, not line, on the pinned branch.
 | cpp | `src/impl/utils/cache/CollectionTsCache.h/.cpp` (`GetInstance()`) | `CollectionCacheKey` (endpoint, db, collection) | `src/impl/utils/DqlUtils.cpp` (`Get`/`Set` around search/query) |
 | csharp | `Milvus.Client.V2/Utils/CollectionTsCache.cs` (`CollectionTsCache.Instance`) | `Milvus.Client.V2/Utils/CollectionCacheKey.cs` (endpoint normalized lower-case host:port, db empty -> "default") | `Milvus.Client.V2/Utils/MilvusTimestampUtils.cs` / DML+query paths building `guaranteeTimestamp` for Session |
 | rust | `src/v2/client/cache.rs` (`CollectionTsCache`, `COLLECTION_TS_CACHE`) | (endpoint, db, collection), endpoint normalized, db empty -> "default" | `src/v2/client/cache.rs` (`guarantee_timestamp`) |
+| go | none on `2.6`; no CollectionTsCache and no `guarantee_timestamp` wiring on the 2.6 client | — | absent; `Search`/`Query` options only map `ConsistencyLevel` + `UseDefaultConsistency`, no Session ts cache |
 
 Key behaviors to compare: monotonic `set` (never overwrite with an older ts),
 `invalidate`/`invalidate_db` on drop/rename/alias-drop, `move`/`copy` on
@@ -103,6 +105,7 @@ rename/alias, `clear`/capacity, empty-cache fallback for Session.
 | cpp | `src/impl/utils/cache/SchemaCache.h/.cpp` (`GetInstance()`, `GetOrLoad` with load-scope coalescing) | `src/impl/MilvusClientV2Impl.cpp` (`SchemaCache::GetInstance().Invalidate` in every schema-mutating API; insert schema-mismatch retry at ~line 1878) | `src/include/milvus/types/CollectionDesc.h` |
 | csharp | `Milvus.Client.V2/Utils/SchemaCache.cs` (`SchemaCache.Instance`, `GetOrLoadAsync` with single-flight coalescing) | invalidation via `SchemaCache.Instance.Invalidate` / `InvalidateDb` in `MilvusClientV2.Collection.cs` and other schema-mutating APIs | `MilvusClientV2.Collection.cs` (`DescribeCollection` caches via `GetOrLoadAsync`) |
 | rust | `src/v2/client/cache.rs` (`SchemaCache`, `SCHEMA_CACHE`, `get_or_load` with load-scope coalescing) | invalidation in `src/v2/client/*.rs` on schema-mutating APIs | `src/v2/client/cache.rs` |
+| go | `client/milvusclient/common.go` (`CollectionCache`, per-`Client` field `collCache`, singleflight coalescing) | collection name only (per client; no endpoint/db in key) | `client/milvusclient/common.go` `getCollection`; `Evict` only inside `retryIfSchemaError` (schema-mismatch ts change) and `Reset` on `connectInternal`; no eviction on drop/rename/alter/index |
 
 Key behaviors to compare: cache-hit fast path skipping `DescribeCollection`
 RPC, loader coalescing (java/cpp/rust/csharp) vs plain get/set (pymilvus),
@@ -119,6 +122,7 @@ and eviction.
 | cpp | `src/impl/utils/RpcUtils.cpp` (`Retry`), config `src/include/milvus/types/RetryParam.h` | 75, initial 10ms, max 3000ms, multiplier 3, `max_retry_timeout_ms` 0, `retry_on_ratelimit_` True | `proto::common::ErrorCode::RateLimit` (legacy 49) or `ServerCode() == 8`; gRPC no-retry codes | insert/upsert `SchemaMismatch` -> invalidate SchemaCache + retry (`MilvusClientV2Impl.cpp`) |
 | csharp | `Milvus.Client.V2/Utils/RetryPolicy.cs` (`RetryPolicy.ExecuteAsync`/`IsRetryable`), config `Milvus.Client.V2/Types/RetryConfig.cs` | 75, initial 10ms, max 3000ms, multiplier 3, `MaxRetryTimeout` null (no overall cap), `RetryOnRateLimit` True | `MilvusErrorCode.RateLimit` (legacy 49) or current code 8 (`MilvusErrorCode.cs`); gRPC no-retry codes in `RetryPolicy.NonRetryableRpcCodes` | via SchemaCache invalidation + retry in service layer |
 | rust | `src/v2/client.rs` (`retry_call`, `retry_rpc`, `retry_transport`, `RetrySemantics`), config `src/v2/types/common.rs` (`RetryConfig`) | 75 attempts, initial 10ms, max 3000ms, multiplier 3, `max_retry_timeout` 0, `retry_on_rate_limit` True; idempotent vs non-idempotent semantics | `is_rate_limit` in `src/v2/client.rs` (`ErrorCode::RateLimit` or `status.code == 8`) | `src/v2/client/dml.rs` (`is_schema_mismatch` -> `remove_collection_description` + retry once) |
+| go | `client/milvusclient/client.go` (`dialOptions` grpc_retry interceptor) + `common.go` (`retryIfSchemaError`) using `milvus/pkg/v2/util/retry` | grpc-retry max 6 on `Unavailable`/`ResourceExhausted`, backoff 60ms*3^n; `retryIfSchemaError` via `pkg/util/retry` default 10 attempts 200ms..3s doubling; RateLimit interceptor (`interceptors.go` `RetryOnRateLimitInterceptor`, config `RetryRateLimitOption` max 75 / 3s) exists but is NOT wired by default (commented out in `dialOptions`) | absent by default (opt-in via `ClientConfig.DialOptions` + `RetryOnRateLimitInterceptor`) | `common.go` `retryIfSchemaError`: on `ErrCollectionSchemaMismatch` evict `collCache` when `UpdateTimestamp` changed and retry |
 
 Key behaviors to compare: default policy numbers, per-client configurability
 (java `withRetry`, cpp `SetRetryParam`, rust `set_retry_param`, pymilvus per-call
@@ -142,6 +146,7 @@ completeness checklist; they are not a semantic parity verdict.
 | cpp | `src/include/milvus/types/TelemetryConfig.h` (`enabled=true`, `heartbeat_interval_ms=10000`, `sampling_rate=1.0`, `error_max_count=100`, empty generated `client_id`) | `src/include/milvus/ClientTelemetry.h` and `src/impl/ClientTelemetry.cpp`; facade inline virtual `GetTelemetry()` in `MilvusClientV2.h` | `ConnectParam::Telemetry`, `MilvusConnection.cpp` handshake/transport rebound, `MilvusClientV2Impl.cpp` connection and close paths, `TelemetryUtils.h` proto conversion |
 | csharp | No client-side telemetry implementation found in `Milvus.Client.V2`; generated `Protos` types do not count as an SDK feature | unavailable | unavailable on current mapped branches |
 | rust | `src/v2/types/common.rs` `TelemetryConfig` (`enabled=true`, 10-second heartbeat, sampling 1.0, 100 errors, empty generated/pinned client ID) | `src/v2/client/telemetry.rs` `ClientTelemetry`; facade `telemetry()` in `src/v2/client.rs` | `ClientTelemetryService`, command handlers/acks, heartbeat task, use-database/username update, transport rebound/global-cluster integration |
+| go | No client-side telemetry on `2.6` (`client/milvusclient/telemetry.go` and `Client.GetTelemetry()` absent) | unavailable | unavailable; report explicitly |
 
 Key behaviors to compare: default enablement and opt-out; config fields, units,
 and validation/clamping; stable client IDs; manager accessibility; operation
@@ -170,6 +175,7 @@ mechanism. Do not infer parity from the factory method alone.
 | cpp | `src/include/milvus/MilvusClientV2Session.h` + `src/impl/MilvusClientV2SessionImpl.*` (`MilvusClientV2Session`) | facade `Session(cluster_id, session)` in `MilvusClientV2.h`; session exposes Search/SearchIterator/HybridSearch/Query/Get/QueryIterator, `ClusterID`, and `Close` | session impl holds parent and `cluster_id_`, forwards DQL to `*_with_cluster`-equivalent private overloads; `Close` resets parent and rejects later calls |
 | csharp | `Milvus.Client.V2/MilvusClientV2.Session.cs` (`MilvusClientV2Session`) on `source/main`; absent from 2.6 | facade `Session(clusterId)`; session exposes async search/hybrid-search/query/get and both iterators, `ClusterId`, and `Close` | core methods accept `ClusterId`; session validates non-whitespace-empty ID and gates calls on `_closed`; iterators hold parent/routing directly and are not stopped by later `Close` |
 | rust | `src/v2/client/session.rs` (`MilvusClientV2Session`) | facade `session(cluster_id)` in `src/v2/client.rs`; session exposes async search/hybrid-search/query/get/iterators, `cluster_id`, and `close` | session holds a cloned `ClientV2`; DQL calls use `*_with_cluster`, `set_cluster_param` injects/overrides `cluster_id`, and iterators bind to the session closed flag |
+| go | none on `2.6`; no client-session / `cluster_id` routing on the 2.6 client (3.0/master-line mechanism) | absent | absent; report explicitly |
 
 Key behaviors to compare: factory availability and empty-ID validation; exact
 DQL surface; absence of DML/admin methods; cluster-ID accessor and
@@ -253,6 +259,22 @@ SDKs' names. The facade class is split into partials (`MilvusClientV2.cs` plus
 standalone REST bulk-import client (`BulkImportConfig` + `BulkImport`), not a
 facade partial, and is excluded by the `MilvusClientV2[^/]*\.cs$` match.
 
+go (public `*Client` methods across `client/milvusclient/*.go`, excluding
+`*_test.go`; debugging aid only — use `scripts/extract_surface.py`):
+
+```bash
+git -C "$HOME/work/git-go/milvus" show source/<branch>:client/milvusclient/collection.go \
+  | grep -nE 'func \(c \*Client\) [A-Z]' | sed -E 's/.*\) ([A-Za-z0-9_]+)\(.*/\1/' | sort -u
+```
+
+Go facade methods are `func (c *Client) Op(ctx, option XxxOption, callOptions ...grpc.CallOption) (Result, error)`.
+Request surface is the `XxxOption` interface plus the concrete `xxxOption`
+struct and its `WithXxx` builders in `*_options.go`. The module lives inside
+`milvus-io/milvus` (`client/`), so the proto anchor is the
+`milvus-proto/go-api/vX` requirement in `client/go.mod` (pseudo-version commit
+resolved via `gh api`); on `2.6` the module path is `client/v2` + `go-api/v2`.
+`client/internal/` and `milvusclient/telemetry.go` do not exist on `2.6`.
+
 ## Deprecation markers per SDK (Step 2 deprecated-status comparison)
 
 Detect deprecation status on each SDK pinned to the branch. Marker syntax and
@@ -265,6 +287,7 @@ example grep commands:
 | cpp | `[[deprecated(...)]]` attribute | `git -C "$HOME/work/git-go/milvus-sdk-cpp" show source/<branch>:src/include/milvus/MilvusClientV2.h \| grep -nB1 'deprecated'` |
 | rust | `#[deprecated(...)]` attribute | `git -C "$HOME/work/git-go/milvus-sdk-rust" show source/<branch>:src/v2/client.rs \| grep -nA1 '#\[deprecated'` (repeat per `src/v2/client/*.rs`) |
 | csharp | `[Obsolete]` attribute | `git -C "$HOME/work/git-go/milvus-sdk-csharp" show source/<branch>:<MilvusClientV2.cs or partial> \| grep -nB1 'Obsolete'` |
+| go | `// Deprecated:` (or `// Deprecated, ...`) comment line immediately before the declaration | `git -C "$HOME/work/git-go/milvus" grep -n -B1 '// Deprecated' refs/remotes/source/<branch> -- client/milvusclient/*.go` |
 
 Match the deprecation marker to the method it annotates (it precedes the
 declaration). A deprecated plain variant that has a covering `*V2` variant is
@@ -280,11 +303,14 @@ documented nontrivial aliases, including:
 
 | pymilvus | java | cpp | csharp | rust |
 |---|---|---|---|---|
-| `using_database` / `use_database` | `useDatabase` | `UseDatabase` | `UseDatabaseAsync` | `use_database` |
-| `list_loaded_segments` | `getQuerySegmentInfo` | `ListQuerySegments` | `GetQuerySegmentInfoAsync` | `list_query_segments` |
-| `list_persistent_segments` / `list_segments` | `getPersistentSegmentInfo` | `ListPersistentSegments` | `GetPersistentSegmentInfoAsync` | `list_persistent_segments` |
-| `get_partition_stats` | `getPartitionStats` | `GetPartitionStatistics` | `GetPartitionStatsAsync` | `get_partition_stats` |
-| `close` | `close` | `Disconnect` | `Dispose` | `close` |
+| `list_loaded_segments` | `getQuerySegmentInfo` | `ListQuerySegments` | `GetQuerySegmentInfoAsync` | `list_query_segments` | — |
+| `list_persistent_segments` / `list_segments` | `getPersistentSegmentInfo` | `ListPersistentSegments` | `GetPersistentSegmentInfoAsync` | `list_persistent_segments` | `GetPersistentSegmentInfo` |
+| `get_partition_stats` | `getPartitionStats` | `GetPartitionStatistics` | `GetPartitionStatsAsync` | `get_partition_stats` | `GetPartitionStats` |
+| `close` | `close` | `Disconnect` | `Dispose` | `close` | `Close` |
+| `list_databases` | `listDatabase` | — | `ListDatabaseAsync` | `list_database` | `ListDatabase` |
+| `update_resource_groups` | `updateResourceGroup` | — | `UpdateResourceGroupAsync` | — | `UpdateResourceGroup` |
+| `alter_collection_field` | `alterCollectionFieldProperty` | `AlterCollectionFieldProperties` | `AlterCollectionFieldPropertiesAsync` | — | `AlterCollectionFieldProperty` |
+| `using_database` / `use_database` | `useDatabase` | `UseDatabase` | `UseDatabaseAsync` | `use_database` | `UseDatabase` |
 
 The mapper's candidates are not parity verdicts: read both implementations
 before deciding which candidate covers the baseline. When java exposes both a

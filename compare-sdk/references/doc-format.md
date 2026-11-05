@@ -83,7 +83,8 @@ This format is derived from the existing gap docs (author-machine notes under
   in Main gaps and mark the API Comparison row
   `Partial - deprecated in <sdk> but not in <sdk>`. Deprecation markers per SDK:
   pymilvus `@deprecated`, java `@Deprecated`, cpp `[[deprecated]]`, rust
-  `#[deprecated]`, csharp `[Obsolete]`. A deprecated audited-side method with no
+  `#[deprecated]`, csharp `[Obsolete]`, go `// Deprecated:` comment line. A
+  deprecated audited-side method with no
   mapped baseline equivalent stays in the helper/deprecated exclusion (Ignored),
   not a gap; a deprecated plain variant under a covering `*V2` variant is
   legacy-compat, not a gap.

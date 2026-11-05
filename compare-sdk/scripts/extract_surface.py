@@ -16,12 +16,14 @@ from pathlib import Path
 from typing import Any
 
 
-SUPPORTED_SDKS = ("pymilvus", "java", "cpp", "csharp", "rust")
+SUPPORTED_SDKS = ("pymilvus", "java", "cpp", "csharp", "rust", "go")
 FACADE_PATHS = {
     "pymilvus": ("pymilvus/milvus_client/milvus_client.py",),
     "java": ("sdk-core/src/main/java/io/milvus/v2/client/MilvusClientV2.java",),
     "cpp": ("src/include/milvus/MilvusClientV2.h",),
 }
+GO_FACADE_ROOT = "client/milvusclient"
+GO_FACADE_PATTERN = re.compile(r"client/milvusclient/[A-Za-z0-9_]+\.go")
 def run_git(repo: Path, *args: str) -> str:
     try:
         completed = subprocess.run(
@@ -48,6 +50,7 @@ def strip_comments(source: str) -> str:
         if state == "code":
             if char == "/" and nxt == "/":
                 state = "line"
+                result.append("  ")
                 index += 2
                 continue
             if char == "/" and nxt == "*":
@@ -55,7 +58,7 @@ def strip_comments(source: str) -> str:
                 result.append("  ")
                 index += 2
                 continue
-            if char == '"' or char == "'":
+            if char == '"' or char == "'" or char == "`":
                 state = "string"
                 quote = char
             result.append(char)
@@ -140,7 +143,7 @@ def matching_delimiter(source: str, open_index: int, opening: str, closing: str)
             elif char == quote:
                 quote = ""
             continue
-        if char in "\"'":
+        if char in "\"\'`":
             quote = char
         elif char == opening:
             depth += 1
@@ -189,13 +192,15 @@ def unwrap_response_type(return_type: str) -> str:
     return return_type or "void"
 
 
-def request_type_from_parameters(parameters: list[dict[str, Any]]) -> str | None:
+def request_type_from_parameters(parameters: list[dict[str, Any]], sdk: str = "") -> str | None:
     for parameter in parameters:
         request_type = parameter["type"].strip()
         if request_type.startswith("impl Into<") and request_type.endswith(">"):
             request_type = request_type[len("impl Into<") : -1].strip()
         request_type = request_type.removeprefix("const ").removesuffix("&").strip()
         if request_type.endswith(("Req", "Request")):
+            return request_type
+        if sdk == "go" and request_type.endswith("Option"):
             return request_type
     return None
 
@@ -212,8 +217,9 @@ def base_method(
     is_static: bool = False,
     overload_index: int = 0,
     response_parameter_type: str | None = None,
+    sdk: str = "",
 ) -> dict[str, Any]:
-    request_type = request_type_from_parameters(parameters)
+    request_type = request_type_from_parameters(parameters, sdk)
     response_type = response_parameter_type or unwrap_response_type(return_type)
     return {
         "method_id": f"{name}#{overload_index}",
@@ -232,6 +238,8 @@ def base_method(
 
 
 def decorator_is_deprecated(decorator: ast.expr) -> bool:
+    if isinstance(decorator, ast.Call):
+        decorator = decorator.func
     if isinstance(decorator, ast.Name):
         return decorator.id == "deprecated"
     if isinstance(decorator, ast.Attribute):
@@ -593,6 +601,79 @@ def extract_rust(source: str, path: str = "src/v2/client.rs") -> list[dict[str, 
     return methods
 
 
+def parse_go_parameters(raw: str) -> list[dict[str, Any]]:
+    parameters: list[dict[str, Any]] = []
+    for part in split_top_level(raw):
+        if not part:
+            continue
+        tokens = split_top_level(part.strip(), separator=" ")
+        if len(tokens) < 2:
+            continue
+        parameter_name = tokens[0].lstrip("*&").strip()
+        parameter_type = " ".join(tokens[1:])
+        parameters.append({"name": parameter_name, "type": parameter_type, "default": None})
+    return parameters
+
+
+def parse_go_return(section: str) -> tuple[str, str]:
+    """Return (raw return section, response type) for a Go facade signature."""
+    section = " ".join(section.split())
+    if not section:
+        return "error", "void"
+    inner = section
+    if inner.startswith("(") and inner.endswith(")"):
+        inner = inner[1:-1].strip()
+    for part in split_top_level(inner):
+        tokens = split_top_level(part, separator=" ")
+        if len(tokens) == 1:
+            candidate = tokens[0]
+            if candidate == "error":
+                continue
+            return section, candidate
+        candidate = " ".join(tokens[1:])
+        if candidate == "error":
+            continue
+        return section, candidate or "void"
+    return section, "void"
+
+
+def extract_go(source: str, path: str = "client/milvusclient/client.go") -> list[dict[str, Any]]:
+    cleaned = strip_comments(source)
+    methods: list[dict[str, Any]] = []
+    overload_counts: dict[str, int] = {}
+    for match in re.finditer(
+        r"\bfunc\s+\(\s*[a-zA-Z_][a-zA-Z0-9_]*\s+\*?Client\s*\)\s+"
+        r"([A-Z][A-Za-z0-9_]*)\s*\(",
+        cleaned,
+    ):
+        name = match.group(1)
+        open_paren = match.end() - 1
+        close_paren = matching_delimiter(cleaned, open_paren, "(", ")")
+        if close_paren == -1:
+            continue
+        body_brace = cleaned.find("{", close_paren + 1)
+        if body_brace == -1:
+            continue
+        return_section = cleaned[close_paren + 1 : body_brace].strip()
+        return_type, response_type = parse_go_return(return_section)
+        overload_counts[name] = overload_counts.get(name, 0)
+        methods.append(
+            base_method(
+                name,
+                file=path,
+                line=line_of_index(cleaned, match.start()),
+                parameters=parse_go_parameters(cleaned[open_paren + 1 : close_paren]),
+                return_type=return_type,
+                deprecated=previous_line(source, match.start()).startswith("// Deprecated"),
+                response_parameter_type=response_type,
+                overload_index=overload_counts[name],
+                sdk="go",
+            )
+        )
+        overload_counts[name] += 1
+    return methods
+
+
 def list_ref_files(repo: Path, ref: str, directory: str, pattern: re.Pattern[str]) -> list[str]:
     output = run_git(repo, "ls-tree", "-r", "--name-only", ref, directory)
     return [line for line in output.splitlines() if pattern.fullmatch(line)]
@@ -637,6 +718,18 @@ def extract_from_repo(sdk: str, repo: Path, ref: str) -> list[dict[str, Any]]:
         methods = []
         for path in paths:
             methods.extend(extract_rust(run_git(repo, "show", f"{ref}:{path}"), path))
+        return renumber_overloads(
+            sorted(methods, key=lambda method: (method["name"], method["file"], method["line"]))
+        )
+    if sdk == "go":
+        paths = [
+            path
+            for path in list_ref_files(repo, ref, GO_FACADE_ROOT, GO_FACADE_PATTERN)
+            if not path.endswith("_test.go")
+        ]
+        methods = []
+        for path in paths:
+            methods.extend(extract_go(run_git(repo, "show", f"{ref}:{path}"), path))
         return renumber_overloads(
             sorted(methods, key=lambda method: (method["name"], method["file"], method["line"]))
         )

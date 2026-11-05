@@ -12,7 +12,7 @@ from pathlib import Path
 from typing import Any
 
 
-SUPPORTED_SDKS = {"pymilvus", "java", "cpp", "csharp", "rust"}
+SUPPORTED_SDKS = {"pymilvus", "java", "cpp", "csharp", "rust", "go"}
 
 
 # These interfaces do not follow ordinary snake/camel/Pascal naming or have a
@@ -125,6 +125,36 @@ MANUAL_ALIAS_GROUPS: tuple[dict[str, Any], ...] = (
             "searchIteratorV2",
             "SearchIterator",
             "SearchIteratorAsync",
+        ),
+    },
+    {
+        "canonical": "list_databases",
+        "names": (
+            "list_databases",
+            "list_databases_v2",
+            "listDatabase",
+            "ListDatabase",
+            "ListDatabaseAsync",
+            "list_database",
+        ),
+    },
+    {
+        "canonical": "update_resource_groups",
+        "names": (
+            "update_resource_groups",
+            "updateResourceGroup",
+            "UpdateResourceGroup",
+            "UpdateResourceGroupAsync",
+        ),
+    },
+    {
+        "canonical": "alter_collection_field",
+        "names": (
+            "alter_collection_field",
+            "alterCollectionFieldProperty",
+            "AlterCollectionFieldProperty",
+            "AlterCollectionFieldPropertiesAsync",
+            "alter_collection_field_property",
         ),
     },
 )
