@@ -208,6 +208,31 @@ def import_region_end(lines, lang):
     return end
 
 
+COMMENT_PREFIX = re.compile(r"^\s*(?://|#|/\*|//!)")
+LEAD_SPACES = re.compile(r"^[ \t]*")
+
+
+def over_indent(text):
+    """Return N (>=2) if the fragment's top-level statements are uniformly
+    shifted right by N spaces; None otherwise."""
+    indents = []
+    for ln in text.split("\n"):
+        s = ln.rstrip()
+        if not s.strip():
+            continue
+        if COMMENT_PREFIX.match(s):
+            continue
+        indents.append(len(LEAD_SPACES.match(s).group(0)))
+    if not indents:
+        return None
+    m = min(indents)
+    return m if m >= 2 else None
+
+
+def dedent(text, n):
+    return "\n".join((l[n:] if len(l) - len(l.lstrip()) >= n else l) for l in text.split("\n"))
+
+
 def check_doc(content):
     viol = []
     for bid, lang, text in extract_blocks(content):
@@ -216,6 +241,9 @@ def check_doc(content):
             probs += rule6(lang, text)
         if lang in CODE_LANGS:
             probs += rule7(lang, text)
+            n = over_indent(text)
+            if n is not None:
+                probs.append(f"indent-over={n}")
         if probs:
             viol.append((bid, lang, probs))
     return viol
@@ -226,9 +254,30 @@ def main():
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--doc", default="doc", help="label for the report")
     ap.add_argument("--xml", help="file containing the fetch output")
+    ap.add_argument("--fix", metavar="OUTDIR",
+                    help="write block_replace payloads fixing indent-over to OUTDIR (plus commands.sh)")
     args = ap.parse_args()
     content = read_content(args)
     viol = check_doc(content)
+    if args.fix:
+        import os
+        os.makedirs(args.fix, exist_ok=True)
+        cmds = ["#!/usr/bin/env bash"]
+        fixed = 0
+        for bid, lang, probs in viol:
+            n = next((int(p.split("=")[1]) for p in probs if p.startswith("indent-over=")), None)
+            if n is None:
+                continue
+            text = next(t for b, l, t in extract_blocks(content) if b == bid)
+            new = dedent(text, n).strip("\n") + "\n"
+            fn = f"{args.fix}/{bid[:12]}.txt"
+            open(fn, "w").write(f'<pre lang="{lang}" caption="&#xA;" wrap="false"><code>{html.escape(new, quote=True)}</code></pre>')
+            open(fn + ".bid", "w").write(bid)
+            cmds.append(f'lark-cli docs +update --doc "$DOC" --command block_replace --block-id {bid} --content "$(cat {fn})" --as user')
+            fixed += 1
+        open(f"{args.fix}/commands.sh", "w").write("\n".join(cmds) + "\n")
+        print(f"=== {args.doc}: {fixed} indent-fix payload(s) written to {args.fix} ===")
+        sys.exit(0)
     if not viol:
         print(f"=== {args.doc}: 0 rule-6/7 violations ===")
         sys.exit(0)

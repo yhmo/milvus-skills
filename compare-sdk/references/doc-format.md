@@ -15,8 +15,8 @@ This format is derived from the existing gap docs (author-machine notes under
 | Status | Meaning |
 |---|---|
 | Implemented | The audited SDK exposes an equivalent facade or request API with the same core capability. |
-| Partial | The audited SDK has the underlying capability but is missing a baseline input parameter/default/coercion behavior or an observable output value/behavior, or input-validation semantics diverge in either direction (see Input Validation Comparison), or wire-expressiveness diverges - proto member mapping, data encoding, or RPC-issuance short-circuit mismatch (see Wire-expressiveness audit), or an internal mechanism diverges - CollectionTsCache / SchemaCache / Retry / client telemetry / client session behavior mismatch (see Client Session Comparison and Internal Mechanisms Comparison), or deprecation status diverges - the interface is marked deprecated on one side but not the other (bidirectional, see Main gaps and API Comparison). |
-| **Missing** | No equivalent audited-SDK facade/request API was found. |
+| Partial | The audited SDK has the underlying capability but is missing a baseline input parameter/default/coercion behavior or an observable output value/behavior, or input-validation semantics diverge in either direction (see Input Validation Comparison), or wire-expressiveness diverges - proto member mapping, data encoding, or RPC-issuance short-circuit mismatch (see Wire-expressiveness audit), or an internal mechanism diverges - CollectionTsCache / SchemaCache / Retry / client telemetry / client session behavior mismatch (see Client Session Comparison and Internal Mechanisms Comparison), or a BulkImport lifecycle endpoint / request field / default / output field / endpoint mapping / deprecation marker diverges (see BulkImport Comparison), or deprecation status diverges - the interface is marked deprecated on one side but not the other (bidirectional, see Main gaps and API Comparison). |
+| **Missing** | No equivalent audited-SDK facade/request API was found (for BulkImport: no equivalent REST lifecycle endpoint or no import surface at all). |
 | Ignored / excluded | Helper, lifecycle, config, deprecated, or legacy-V1 surface not treated as a parity target. |
 
 ## Counting conventions
@@ -77,6 +77,13 @@ This format is derived from the existing gap docs (author-machine notes under
   APIs, missing `guarantee_timestamp` wiring for `ConsistencyLevel.Session`,
   missing RateLimit retry (legacy 49 / current 8), and missing
   schema-mismatch single retry ARE gaps.
+- BulkImport divergences count as `Partial` in both directions (see BulkImport
+  Comparison): a REST lifecycle endpoint, request field or default, output
+  field, endpoint mapping (`/describe` vs `/get_progress`), or deprecation
+  marker the baseline has that the audited side lacks (or vice versa). Absence
+  of the entire import surface is `Missing`. Sync-vs-async and
+  raw-envelope-vs-typed-response shapes are language-typical and are NOT gaps
+  by themselves.
 - Deprecated-status divergences count as `Partial` in BOTH directions: the
   interface is marked deprecated on the baseline but not on the audited side,
   OR marked deprecated on the audited side but not on the baseline. Report each
@@ -129,6 +136,11 @@ Scope:
     session/global-cluster routing) and what is
     ignored (singleton-vs-client
     scoping, cache-key normalization)
+  - BulkImport audit scope (the standalone REST
+    `/v2/vectordb/jobs/import/{create,describe,list,commit,abort}` surface per
+    SDK, per-endpoint request expressiveness, response observability, endpoint
+    mapping, sync/async + TLS config, deprecation markers) and what is ignored
+    (language-typical sync/async and raw-envelope-vs-typed-response shapes)
   - deprecated-status comparison in both directions (interface marked
     deprecated on one side but not the other) and what is ignored (audited-side
     deprecated methods with no mapped baseline equivalent, deprecated plain
@@ -325,6 +337,36 @@ Not gaps: singleton-vs-per-client scoping and cache-key normalization (empty db
 -> "default", endpoint normalization). Rows here reconcile with the `Partial`
 rows in the API Comparison table.
 
+## BulkImport Comparison
+
+| Lifecycle / aspect | Baseline | Audited side | Direction | Status |
+|---|---|---|---|---|
+| Create (import) | ... | ... | ... | ... |
+| Get progress / describe | ... | ... | ... | ... |
+| List jobs | ... | ... | ... | ... |
+| Commit | ... | ... | ... | ... |
+| Abort | ... | ... | ... | ... |
+| Import sources (files / object_url(s) / volume) | ... | ... | ... | ... |
+| Options / RLS | ... | ... | ... | ... |
+| Cloud fields / credentials | ... | ... | ... | ... |
+| Response observability | ... | ... | ... | ... |
+| Endpoint mapping | ... | ... | ... | ... |
+| Deprecation markers | ... | ... | ... | ... |
+
+One row per BulkImport divergence found in Step 7b, in both directions. Bulk
+import is the REST `/v2/vectordb/jobs/import/*` surface, which is a standalone
+helper in every SDK (pymilvus `bulk_writer`, java `BulkImportUtils`, cpp
+`milvus::BulkImport`, csharp `BulkImport`, rust `BulkImport`, go `bulkwriter`)
+— never a V2 gRPC facade method, so it does not appear in the API Comparison
+table. Key rows by the canonical REST endpoint (`create`/`list`/`describe`/
+`commit`/`abort`) and name each SDK's method in the cell; a different method
+name for the same endpoint is NOT a gap (see the method-name mapping in
+`references/sdk-map.md`). Every row must name the missing lifecycle endpoint,
+request field, default, output field, or endpoint mapping. Absence of the whole
+surface is `Missing`. Sync-vs-async and raw-envelope-vs-typed-response shapes
+are NOT gaps. Source paths per SDK are in `references/sdk-map.md` under
+"BulkImport (Step 7b)".
+
 ## Data Type Comparison (only when neither SDK is pymilvus)
 
 | <SDK1 DataType> | <SDK2 DataType> | Code | Status | Notes |
@@ -369,7 +411,9 @@ source files read per SDK for
 CollectionTsCache, SchemaCache, Retry, client telemetry, and client session
 (from `references/sdk-map.md`), plus both `extract_session.py`
 commands/digests and the `compare_session.py` command/digest, so the mechanism
-rows can be re-verified at the same commits.
+rows can be re-verified at the same commits. For the BulkImport comparison,
+record the pinned helper paths read per SDK (from `references/sdk-map.md`
+under "BulkImport (Step 7b)") and the REST endpoints compared.
 
 ## Update policy
 

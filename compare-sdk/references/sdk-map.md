@@ -184,6 +184,59 @@ synchronous/asynchronous parity; iterator routing; close semantics for the
 session, clones/views, and iterators created before close; and explicit
 unavailable status when an SDK has no session mechanism.
 
+### BulkImport - REST import-jobs surface (Step 7b)
+
+Bulk import is a standalone REST surface in every SDK — none of the six exposes
+it as a V2 gRPC facade method, so it is not captured by `extract_surface.py`.
+All of them call the Milvus HTTP `/v2/vectordb/jobs/import/{create,describe,
+list,commit,abort}` endpoints (csharp uses `/get_progress` for progress and
+omits commit/abort on its 2.6 surface). Read the listed paths pinned to the
+branch with `git show refs/remotes/source/<branch>:[path]`; line numbers are
+approximate, search by symbol.
+
+| SDK | Helper surface | Transport / config | Request types | Response |
+|---|---|---|---|---|
+| pymilvus | `pymilvus/bulk_writer/bulk_import.py` — functions `bulk_import` (`:112`), `get_import_progress` (`:286`), `commit_import` (`:342`), `abort_import` (`:398`), `list_import_jobs` (`:454`); re-exported from `pymilvus/bulk_writer/__init__.py` | sync `requests` REST; `verify`/`cert`/`headers` kwargs | function args: `files`, `object_url`/`object_urls`, `volume_name`, `data_paths`, `api_key`, `access_key`/`secret_key`/`token`, `cluster_id`/`project_id`/`region_id`; `partition_name`/`options` via kwargs; IDEMPOTENCY_KEY header | raw `requests.Response` (`res["code"] == 0` else `MilvusException`); no typed class. Legacy gRPC `utility.do_bulk_insert*` (`pymilvus/orm/utility.py:850-966`) is `@deprecated` |
+| java | `sdk-bulkwriter/src/main/java/io/milvus/bulkwriter/restful/BulkImportUtils.java` (extends `BaseRestful`) — static `bulkImport`, `getImportProgress`, `listImportJobs`, `commitImport`, `abortImport` (`:82-141`) | sync REST, returns raw JSON `String`; credentials `transient`/redacted; RLS injected into `options` (`addRlsOptions` `:59`) | `sdk-bulkwriter/src/main/java/io/milvus/bulkwriter/request/import_/*.java`: `BaseImportRequest` (transient `apiKey`/`options`/`rlsPrincipal`/`skipRls`), `MilvusImportRequest` (`dbName`/`collectionName`/`partitionName`/`files`), `CloudImportRequest`, `VolumeImportRequest`; `describe/` and `list/` base + Milvus/Cloud requests | raw JSON `String`; envelope validated in `handleResponse` (`BaseRestful`). V1 gRPC `bulkInsert`/`getBulkInsertState` (`MilvusClient.java:725-741`) is legacy surface, not coverage |
+| cpp | `src/include/milvus/BulkImport.h` + `src/impl/BulkImport.cpp` — static `CreateImportJobs`, `ListImportJobs`, `GetImportJobProgress`, `CommitImport`, `AbortImport` | sync REST via cpp-httplib; `BulkImportConfig` (`Timeout`, `VerifyServerCert` default true, `CaCertPath`; no mTLS) | `src/include/milvus/request/import/`: `BaseImportRequest<T>` (`api_key`, `db_name`, `collection_name`, `partition_name`, `options` JSON, `RLSPrincipal`, `SkipRLS`), `MilvusImportRequest` (`files [][]string`), `CloudImportRequest`, `VolumeImportRequest`; `BaseListImportJobsRequest` + Milvus/Cloud; `BaseDescribeImportRequest` + `MilvusDescribeImportRequest` (`jobId`) | `BulkImportResponse` (`RawJson`, `Code`, `Message`, `Data`, `JobId`); raw-JSON overloads in `BulkImport.h:45,80,110,138,166` marked `[[deprecated]]` |
+| csharp | `Milvus.Client.V2/BulkImport.cs` (`BulkImport` + `BulkImportConfig`: `Url`, `ApiKey`, `Timeout` 20s) | async REST via `HttpClient`, `Authorization: Bearer` + `DB-Name` header; `/create` (`:74`), `/list` (`:86`), `/get_progress` (`:97`); NO commit/abort on the 2.6 surface (`BulkImport.cs:38`) | `Milvus.Client.V2/Request/Utility/`: `BulkImportRequest.cs` (`DatabaseName` default `"default"`, `CollectionName`, `PartitionName`, `Files`, cloud ids, deprecated singular `ObjectUrl`, `ObjectUrls`, `AccessKey`/`SecretKey`/`Token`, `VolumeName`, `DataPaths`, `Options`, `RlsPrincipal`, `SkipRls`; `ToBody()` enforces exactly one source), `GetImportProgressRequest.cs` (body key `jobID`), `ListImportJobsRequest.cs` (paging deliberately omitted — 2.6 server ignores it) | `Milvus.Client.V2/Response/Utility/BulkImportResp.cs` — `Code`, `Message`, raw `Data` `JsonElement`, accessors `JobId`/`State`/`Progress`/`Reason` |
+| rust | `src/v2/bulk_import.rs` (`BulkImport` struct; exported via `src/v2/mod.rs:48`, `prelude.rs:24`) — `bulk_import` (`:410`), `list_import_jobs` (`:417`), `get_import_progress` (`:427`), `commit_import` (`:437`), `abort_import` (`:447`) | async reqwest REST; `BulkImportConfig` (`url`, `api_key`, `timeout`, `verify_tls`, `ca_certificate_path`, mTLS `client_identity_path`/`client_certificate_path`/`client_private_key_path`) | `BulkImportRequest` (`database_name`, `collection_name`, `partition_name`, `files`, cloud ids, deprecated singular `object_url`, `object_urls`, `access_key`/`secret_key`/`token`, `volume_name`, `data_paths`, `options: HashMap<String,Value>`; builder `build()` rejects non-exactly-one source `:973`), `ListImportJobsRequest` (`page_size` 10, `current_page` 1), `GetImportProgressRequest`, `DescribeImportRequest` (= alias of get-progress, `:1267`) | `BulkImportResponse { code, message, data: Value }` (`:1327`) with `job_id()/state()/progress()/reason()`; RLS carried in `options` |
+| go | `client/bulkwriter/bulk_import.go` (package-level functions) — `BulkImport` (`:132`), `ListImportJobs` (`:210`), `GetImportProgress` (`:295`), `CommitImport` (`:356`), `AbortImport` (`:417`) | sync `net/http` REST; `/create`, `/list`, `/describe`, `/commit`, `/abort` | option types in the same file: `BulkImportOption` (`URL`, `CollectionName`, `Files [][]string`, `PartitionName`, `APIKey`, `ObjectURL`, `ClusterID`, `AccessKey`, `SecretKey`, `Options map[string]string`; `NewBulkImportOption`/`NewCloudBulkImportOption`, RLS via `WithRLSPrincipal`/`WithSkipRLS`), `ListImportJobsOption` (`PageSize` 10, `CurrentPage` 1), `GetImportProgressOption`/`CommitImportOption`/`AbortImportOption` (`JobID`/`ClusterID`/`APIKey`) | typed responses embedding `ResponseBase{Status,Message}`; `BulkImportResponse.Data.JobID`; `ListImportJobsResponse.Data.Records[]ImportJobRecord{JobID,CollectionName,State,Progress,Reason}`; `GetImportProgressResponse.Data.ImportProgressData{CollectionName,JobID,CompleteTime,State,Progress,ImportedRows,TotalRows,Reason,FileSize,Details[]}`; commit/abort return bare `ResponseBase` |
+
+Key behaviors to compare: the five lifecycle endpoints and their naming,
+placement (standalone helper vs facade), request expressiveness (files vs
+object_url(s) vs volume/data_paths with exactly-one-source enforcement,
+partition name, cloud fields, credentials, `options` JSON incl. RLS, paging
+and its defaults), output observability (job_id/state/progress/reason/
+complete_time/imported-total rows/file_size/details), sync/async + TLS config,
+endpoint mapping (`/describe` vs `/get_progress`), commit/abort availability,
+and deprecation markers (cpp raw-JSON overloads, pymilvus `do_bulk_insert*`,
+singular `object_url`/`ObjectUrl`).
+
+### BulkImport method-name mapping (compare by canonical endpoint, NOT by name)
+
+Each SDK names the five lifecycle methods differently — do not match methods by
+name, and do not treat a different name as a gap. Map every candidate to its
+canonical REST endpoint (`create` / `list` / `describe` / `commit` / `abort`)
+first, then compare parameters and behavior per endpoint:
+
+| Canonical endpoint | pymilvus | java | cpp | csharp | rust | go |
+|---|---|---|---|---|---|---|
+| create | `bulk_import` | `BulkImportUtils.bulkImport` | `BulkImport::CreateImportJobs` | `BulkImport.BulkImportAsync` | `BulkImport::bulk_import` | `bulkwriter.BulkImport` |
+| list | `list_import_jobs` | `BulkImportUtils.listImportJobs` | `BulkImport::ListImportJobs` | `BulkImport.ListImportJobsAsync` | `BulkImport::list_import_jobs` | `bulkwriter.ListImportJobs` |
+| describe / get progress | `get_import_progress` | `BulkImportUtils.getImportProgress` | `BulkImport::GetImportJobProgress` | `BulkImport.GetImportProgressAsync` | `BulkImport::get_import_progress` | `bulkwriter.GetImportProgress` |
+| commit | `commit_import` | `BulkImportUtils.commitImport` | `BulkImport::CommitImport` | (absent on 2.6) | `BulkImport::commit_import` | `bulkwriter.CommitImport` |
+| abort | `abort_import` | `BulkImportUtils.abortImport` | `BulkImport::AbortImport` | (absent on 2.6) | `BulkImport::abort_import` | `bulkwriter.AbortImport` |
+
+Examples of pairs that are the SAME interface despite different names:
+pymilvus `bulk_import` ↔ java `BulkImportUtils.bulkImport` ↔ cpp
+`BulkImport::CreateImportJobs` ↔ csharp `BulkImport.BulkImportAsync` ↔ rust
+`BulkImport::bulk_import` ↔ go `bulkwriter.BulkImport`. The convention varies
+per language even within the same SDK family (java uses camelCase statics on
+`BulkImportUtils`, cpp uses PascalCase `Create*/Get*/List*/Commit*/Abort*`,
+rust/go use the endpoint verb directly), so always key on the canonical
+endpoint.
+
 
 ## Facade method extraction (pinned to the branch)
 

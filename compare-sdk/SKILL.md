@@ -513,6 +513,68 @@ Mechanism 5 - Client session / global-cluster session:
   `Partial` mechanism gap. Do not hide it merely because the feature is
   cloud-only or optional; qualify it in the row if that is intentional.
 
+### Step 7b - BulkImport comparison (REST import-jobs surface)
+
+Bulk import is NOT part of the V2 gRPC facade in any SDK. Every SDK exposes it
+as a standalone helper that calls the Milvus HTTP
+`/v2/vectordb/jobs/import/{create,describe,list,commit,abort}` endpoints —
+pymilvus module functions in `pymilvus/bulk_writer/bulk_import.py`, java static
+`BulkImportUtils` (sdk-bulkwriter module), cpp static `milvus::BulkImport`,
+csharp `BulkImport` + `BulkImportConfig`, rust `BulkImport`, go `bulkwriter`
+package. It therefore never appears in `extract_surface.py` output (which scans
+the gRPC facade) and must be audited as a dedicated surface. Run this for every
+comparison; the import surface exists on both the dev line and 2.6 in all six
+SDKs. Source paths are in `references/sdk-map.md` under "BulkImport (Step 7b)".
+
+Audit and report:
+
+- **Lifecycle surface**: record which of the five REST endpoints each SDK
+  exposes and under what name — create (bulk import), describe/get progress,
+  list jobs, commit, abort. A missing endpoint is a `Missing` row.
+  **Do NOT match methods by name**: every SDK names these methods differently
+  (java `BulkImportUtils.bulkImport`, cpp `BulkImport::CreateImportJobs`,
+  csharp `BulkImportAsync`, rust/go the endpoint verb, pymilvus
+  `bulk_import`). Map each method to its canonical REST endpoint
+  (`create`/`list`/`describe`/`commit`/`abort`) first — see the method-name
+  mapping table in `references/sdk-map.md` — then compare parameters and
+  behavior per endpoint. A different method name is NOT a gap.
+- **Placement and transport**: standalone helper vs facade method; REST base
+  URL, auth (api_key / Bearer, DB-Name header), TLS (`verify`/`cert`,
+  `VerifyServerCert`, `verify_tls`, CA cert), and timeout/config
+  (`BulkImportConfig` on cpp/csharp/rust). Note that none of the SDKs uses the
+  gRPC `Import`/`GetImportState` RPCs for bulk import; the legacy pymilvus
+  `utility.do_bulk_insert*` gRPC helpers are deprecated and not a parity
+  target.
+- **Request expressiveness per endpoint**:
+  - import sources and their mutual-exclusion rule: `files` vs
+    `object_url`/`object_urls` vs `volume_name`/`data_paths` (csharp/go/rust
+    enforce exactly one source);
+  - `partition_name`, cloud fields (`cluster_id`/`project_id`/`region_id`),
+    credentials (`access_key`/`secret_key`/`token`/`api_key`);
+  - `options` JSON, including RLS injection (`rls_principal`/`skip_rls`);
+  - paging (`page_size`/`current_page`, defaults 10/1) and any SDK that
+    deliberately omits paging (csharp drops it because the 2.6 server ignores
+    it);
+  - commit/abort request (job id + cloud ids).
+- **Response observability**: `job_id`, `state`, `progress`, `reason`,
+  `complete_time`, `imported_rows`/`total_rows`, `file_size`, per-file
+  `details`, and whether the SDK exposes a raw envelope (`requests.Response`,
+  JSON `String`, `RawJson`, `JsonElement`, `data: Value`) or typed accessors
+  (`BulkImportResp.JobId`, go typed `ImportJobRecord`, rust
+  `job_id()/state()/progress()` helpers).
+- **Sync/async**: pymilvus/cpp/go are sync, csharp/rust are async; a sync-vs-
+  async divergence is noted but is NOT a gap by itself (language-typical).
+- **Deprecation markers**: cpp raw-JSON overloads `[[deprecated]]`, pymilvus
+  gRPC `do_bulk_insert*`, and singular `object_url`/`ObjectUrl` deprecations
+  (rust/java/csharp) count in both directions.
+- **Endpoint mapping divergence**: csharp maps progress to `/get_progress`
+  while cpp/others use `/describe`; csharp has no commit/abort on the 2.6
+  surface — each is a `Partial` row naming the missing endpoint/behavior.
+- A lifecycle method, request field, default, output field, or deprecation
+  marker present on one side but unavailable on the other is a `Partial` row in
+  the report's BulkImport Comparison table; absence of the entire surface is
+  `Missing`.
+
 ### Step 8 - DataType / IndexType enum comparison
 
 - Only when NEITHER SDK is pymilvus (java/cpp/rust/csharp pairs). When pymilvus
@@ -633,6 +695,12 @@ Mechanism 5 - Client session / global-cluster session:
   schema/DML-mutating APIs, missing guarantee-ts wiring for
   `ConsistencyLevel.Session`, missing rate-limit retry, missing
   schema-mismatch retry, or missing cluster-ID session routing are gaps.
+- BulkImport comparison (Step 7b) is symmetric and counts in both directions: a
+  REST lifecycle endpoint, request field/default, output field, endpoint
+  mapping, or deprecation marker the baseline exposes that the audited side
+  lacks (or vice versa) is a `Partial` gap in the BulkImport Comparison table.
+  Sync-vs-async and raw-envelope-vs-typed-response shapes are language-typical
+  and are NOT gaps by themselves.
 - Proto anchors are generated only by `scripts/resolve_proto.py`: submodule
   gitlinks and C++ `PROTO_COMMIT` resolve to exact `milvus-proto` commits;
   pymilvus uses generated `grpc_gen` descriptors. Record both anchors in the
