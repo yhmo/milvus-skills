@@ -219,6 +219,11 @@ Do not list every internal refactor, test addition, CI cleanup, or code movement
 the user experience. Do not update `CHANGELOG.md` during ordinary implementation work unless the
 user explicitly requests release preparation or a changelog edit.
 
+**Exclude CI-only PRs from release notes.** Do NOT list workflow-only or dependency-bot commits:
+subjects matching `ci:` / `build(deps):` / `chore(deps):` / `dependabot:` and commits that touch
+only `.github/` are not user-visible SDK changes. If a commit mixes a real SDK change with a CI
+touch, list the SDK change and skip the CI noise.
+
 ### 6. Generated proto consistency
 
 This repo generates protobuf Rust files under Cargo `OUT_DIR` and includes them from `src/proto/mod.rs`.

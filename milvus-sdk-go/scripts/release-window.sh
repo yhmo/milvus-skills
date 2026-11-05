@@ -24,12 +24,20 @@ fi
 
 tag="client/v${normalized}"
 
+# CI-only commits (dependency-bot subjects) are excluded from the user-visible
+# change window. The paths are already scoped to client/ and tests/go_client/,
+# so only the subject pattern needs filtering here.
+ci_subject_re='^(ci|build\(deps\)|chore\(deps\)|dependabot):'
+non_ci_log() {
+  git log --format='%h %ad %s' --date=short "$@" 2>/dev/null | grep -vE "$ci_subject_re" || true
+}
+
 echo "== SDK release markers =="
 git log --grep "client" --date=short --format='%h %ad %s' -- client/ | head -3 || true
 
 echo
-echo "== Changes to client/ since ${tag} =="
-client_log="$(git log "${tag}..HEAD" --format='%h %ad %s' --date=short -- client/ || true)"
+echo "== Changes to client/ since ${tag} (CI-only commits excluded) =="
+client_log="$(non_ci_log "${tag}..HEAD" -- client/ || true)"
 if [[ -n "$client_log" ]]; then
   printf '%s\n' "$client_log"
 else
@@ -37,8 +45,8 @@ else
 fi
 
 echo
-echo "== Changes to tests/go_client/ since ${tag} =="
-go_client_log="$(git log "${tag}..HEAD" --format='%h %ad %s' --date=short -- tests/go_client/ || true)"
+echo "== Changes to tests/go_client/ since ${tag} (CI-only commits excluded) =="
+go_client_log="$(non_ci_log "${tag}..HEAD" -- tests/go_client/ || true)"
 if [[ -n "$go_client_log" ]]; then
   printf '%s\n' "$go_client_log"
 else

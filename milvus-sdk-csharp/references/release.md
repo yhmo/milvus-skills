@@ -118,6 +118,23 @@ Important:
 4. Derive entries from implementation commits since the preceding release, not only version-bump or
    marker commits.
 
+## Release-window analysis
+
+Summarize what changed between the last release and now with the bundled helper:
+
+```bash
+"$SKILL_DIR/scripts/release-window.sh" X.Y.Z
+```
+
+It prints the release markers (`Prepare for v...`), the matching `CHANGELOG.md` entry, and the
+commits since the previous `v*` tag.
+
+**Exclude CI-only PRs from release notes.** Do NOT list workflow-only or dependency-bot commits in
+the changelog: subjects matching `ci:` / `build(deps):` / `chore(deps):` / `dependabot:` and commits
+that touch only `.github/` are not user-visible SDK changes. The script already filters them from
+its commit window; keep them out of the changelog entry too. If a commit mixes a real SDK change
+with a workflow touch, list the SDK change and skip the CI noise.
+
 ## NuGet packaging
 
 Build and pack locally for artifact validation:

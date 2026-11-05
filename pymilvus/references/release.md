@@ -133,6 +133,23 @@ The workflow uses trusted publishing permissions (`id-token: write`).
 - Treat PyPI publishing on GitHub Release as production release state.
 - No top-level CHANGELOG file was observed during skill authoring; verify current repo state before claiming where user-visible release notes live.
 
+## Release-window analysis
+
+Summarize what changed since the last release with the bundled helper:
+
+```bash
+"$SKILL_DIR/scripts/release-window.sh" X.Y.Z
+```
+
+It prints the matching tags, the dynamic version at HEAD, and the non-CI commits since the previous
+`v*` tag.
+
+**Exclude CI-only PRs from release notes.** Do NOT list workflow-only or dependency-bot commits:
+subjects matching `ci:` / `build(deps):` / `chore(deps):` / `dependabot:` and commits that touch
+only `.github/` are not user-visible SDK changes. The script already filters them from its commit
+window; keep them out of any release notes / GitHub release body too. If a commit mixes a real SDK
+change with a workflow touch, list the SDK change and skip the CI noise.
+
 ## Local release validation checklist
 
 Before a release PR or release prep:

@@ -20,6 +20,22 @@ A release usually starts with a `chore: bump version to X.Y.Z` commit that only 
 - Derive notes from implementation commits and docs diffs since the previous tag, not only from the version-bump commit.
 - Keep ordinary feature/bug-fix work out of release metadata unless the user explicitly asks for release preparation.
 
+## Release-window analysis
+
+Summarize what changed since the last release with the bundled helper:
+
+```bash
+"$SKILL_DIR/scripts/release-window.sh" X.Y.Z
+```
+
+It prints the release markers (`chore: bump version ...`), the matching release-notes section, and the non-CI commits since the previous `v*` tag.
+
+**Exclude CI-only PRs from release notes.** Do NOT list workflow-only or dependency-bot commits:
+subjects matching `ci:` / `build(deps):` / `chore(deps):` / `dependabot:` and commits that touch
+only `.github/` are not user-visible SDK changes. The script already filters them from its commit
+window; keep them out of the release-notes section too. If a commit mixes a real SDK change with a
+workflow touch, list the SDK change and skip the CI noise.
+
 ## GitHub release and npm publishing (.github/workflows/release.yml)
 
 The npm publish workflow is tag-driven (`release` event with `released`/`prereleased`, or manual `workflow_dispatch`):

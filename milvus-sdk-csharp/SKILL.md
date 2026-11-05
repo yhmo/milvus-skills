@@ -95,6 +95,16 @@ For architecture or implementation work, normally read both `technical-details.m
 - New source files should follow the repository's style and analyzers; `TreatWarningsAsErrors` and `AnalysisLevel=latest` are enabled at the directory level.
 - Do not update `CHANGELOG.md` for ordinary feature or bug-fix work unless the user requests release preparation.
 
+## Release window analysis
+
+When preparing a release or summarizing what changed since the last release, run the bundled helper from the repository root:
+
+```bash
+"$SKILL_DIR/scripts/release-window.sh" X.Y.Z
+```
+
+It prints release markers, the matching `CHANGELOG.md` entry, and the non-CI commits since the previous `v*` tag. Exclude CI-only PRs (workflow-only commits, `ci:` / dependency-bot subjects) from the changelog; see [references/release.md](references/release.md).
+
 ## Validation
 
 - Prefer the narrowest relevant test first (unit, then in-process mock integration, then server-backed system).

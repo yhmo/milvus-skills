@@ -46,6 +46,12 @@ the commits touching `client/` (and `tests/go_client/`) since the given tag.
 "$SKILL_DIR/scripts/release-window.sh" v2.6.4
 ```
 
+**Exclude CI-only PRs from release notes.** Do NOT list dependency-bot or workflow-only commits in
+the changelog/release body: subjects matching `ci:` / `build(deps):` / `chore(deps):` /
+`dependabot:` are not user-visible SDK changes. The script already filters them; keep them out of
+any release notes too. If a commit mixes a real SDK change with a CI touch, list the SDK change and
+skip the CI noise.
+
 ## Dependency bump (milvus-proto)
 
 Releases that need new server APIs first bump `github.com/milvus-io/milvus-proto/go-api/v3`:

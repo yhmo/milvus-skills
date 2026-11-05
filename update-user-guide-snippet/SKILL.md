@@ -112,6 +112,13 @@ config-constant definitions). Real-run verification against a Milvus server is
   `defer cli.Close(ctx)`, C# `using`). Do not confuse language dependency
   statements with Feishu product-branch `<include>` markup, which remains
   governed by the rule below.
+  - **Client variable naming is uniform across languages.** The main client
+    variable should be named `client` everywhere in a document (and workflow)
+    — e.g. Go `cli, err := milvusclient.New(...)` should be written
+    `client, err := ...`, and Java `milvusClient` should be `client` — so the
+    same block-level name is used consistently across SDKs and blocks. Use a
+    distinct variable name only for a genuinely second client (different
+    cluster/credentials), never for the primary one.
   - **Independent workflows are separate scopes.** A document may contain
     multiple independent workflows that each run standalone — e.g. "Use
     AutoID" and "Use manual IDs" in the Primary Field & AutoID doc, each

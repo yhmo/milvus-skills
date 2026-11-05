@@ -56,6 +56,11 @@ valid behavior in a way that requires callers to change code.
 
 Use concise user-visible descriptions, not internal implementation details.
 
+**Exclude CI-only PRs from release notes.** Do NOT list workflow-only or dependency-bot commits:
+subjects matching `ci:` / `build(deps):` / `chore(deps):` / `dependabot:` and commits that touch
+only `.github/` are not user-visible SDK changes. If a commit mixes a real SDK change with a CI
+touch, list the SDK change and skip the CI noise.
+
 ## Version update checklist
 
 When preparing a release:

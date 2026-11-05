@@ -59,6 +59,7 @@ Run bundled scripts from the skill base directory (this skill's own directory), 
 ```bash
 # from the skill directory
 scripts/api-trace.sh search
+scripts/release-window.sh 3.0.2   # release window analysis (CI-only commits excluded)
 scripts/validate-skill.sh "$(pwd)"
 ```
 

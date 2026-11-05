@@ -95,6 +95,7 @@ Run helpers from the SDK repository root. `$SKILL_DIR` is this skill's base dire
 
 ```bash
 "$SKILL_DIR/scripts/api-trace.sh" search
+"$SKILL_DIR/scripts/release-window.sh" 3.0.5   # release window analysis (CI-only commits excluded)
 "$SKILL_DIR/scripts/validate-skill.sh"
 ```
 

@@ -51,6 +51,11 @@ Current sections use:
 Include only sections that have entries. Keep wording concise and user-facing; mention breaking package target changes,
 required Milvus configuration, or compatibility changes explicitly.
 
+**Exclude CI-only PRs from release notes.** Do NOT list workflow-only or dependency-bot commits:
+subjects matching `ci:` / `build(deps):` / `chore(deps):` / `dependabot:` and commits that touch
+only `.github/` are not user-visible SDK changes. If a commit mixes a real SDK change with a CI
+touch, list the SDK change and skip the CI noise.
+
 Do not classify a newly deprecated but still callable API as a breaking change. Put that
 deprecation under the repository's existing non-breaking section and name the replacement.
 Classify an item as breaking only when it is removed, renamed without a compatible alias, has an
