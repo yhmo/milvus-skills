@@ -155,13 +155,13 @@ def resolve(sdk: str, repo: Path, ref: str) -> dict[str, Any]:
     if sdk == "go":
         gomod = run_git(repo, "show", f"{ref}:client/go.mod").stdout
         dependency = re.search(
-            r"^\s*github\.com/milvus-io/milvus-proto/go-api/v2\s+(v\S+)",
+            r"^\s*github\.com/milvus-io/milvus-proto/go-api/v[23]\s+(v\S+)",
             gomod,
             re.M,
         )
         if dependency is None:
             raise SystemExit(
-                "error: milvus-proto/go-api/v2 dependency not found in client/go.mod"
+                "error: milvus-proto/go-api dependency not found in client/go.mod"
             )
         version = dependency.group(1)
         suffix = re.search(r"-([0-9a-f]{12,40})$", version)
