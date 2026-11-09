@@ -20,7 +20,17 @@ Rule 7 (blank-line normalization, per scripts/normalize_snippet.py):
   - blank line right after an opening `{` or right before a closing-only
     `}`/`]`/`)` line;
   - import region → first code line gap not exactly one blank line (handles
-    Go `import (...)` groups and Python `from X import (...)` groups).
+    Go `import (...)` groups and Python `from X import (...)` groups);
+  - chain-call-gap: blank inside a chained method call — previous line ends
+    with `.` (Go `x.New().` + indented `WithField(...)`), or next line starts
+    with `.` at an indent (Java/Rust/C++ `client` + `    .method(...)`);
+  - shell-continuation-gap: blank after a shell line-continuation `\`;
+  - comment-block-gap: blank between two `//` comment lines (excluding
+    `// highlight-start` / `// highlight-end` boundaries);
+  - stmt-gap: blank between two sibling statements at the same indent that
+    both end with `;` and are plain calls (e.g. C++ `schema.AddField(...);`
+    blocks), excluding comments, imports, assignments, object-construction
+    lines, and closing-bracket lines.
 
 Non-SDK data/format blocks (JSON, Plain Text, YAML, XML, HTTP, SQL, Shell
 output) are excluded from Rule 7; SDK languages plus Bash/Shell are checked.
@@ -60,6 +70,34 @@ IMPORT_LINE = {
     "python": re.compile(r"^\s*(?:from\s+\S+\s+import|import\s)"),
 }
 CLOSE_ONLY = re.compile(r"^\s*[}\])][;,]*\s*$")
+
+# control-flow keywords whose `{` opens a statement body (blank lines inside
+# are legal separators, unlike collection literals / chain calls)
+CONTROL_RE = re.compile(
+    r"\b(if|for|while|switch|case|else|do|func|fn|function|match|try|catch|finally|class|struct|impl|main)\b")
+# chars that, immediately before a `{`, force it to be a collection opener
+COLLECT_BEFORE = "([,:=+"
+
+
+def control_block_depths(lines):
+    """Return, for each line, how many control-flow statement blocks
+    (if/for/func/... `{ ... }`) are open at the start of the line. A `{` is a
+    control block when the line carries a control keyword and the char before
+    the `{` is not a collection-forcing char."""
+    depths = []
+    depth = 0
+    for line in lines:
+        depths.append(depth)
+        for i, ch in enumerate(line):
+            if ch == "{":
+                before = line[i - 1] if i > 0 else " "
+                is_block = bool(CONTROL_RE.search(line)) and before not in COLLECT_BEFORE
+                if is_block:
+                    depth += 1
+            elif ch == "}":
+                if depth > 0:
+                    depth -= 1
+    return depths
 
 MAIN_PAT = [
     re.compile(r"^\s*package\s+main\s*$", re.M),
@@ -180,6 +218,59 @@ def rule7(lang, text):
                 nxt += 1
             if nxt < len(lines) and blanks != 1:
                 problems.append(f"import-code-gap={blanks}")
+    # control-block depth (if/for/func/... { ... }) so blank lines inside a
+    # statement body are not mis-reported as chain/literal gaps
+    ctrl = control_block_depths(lines)
+    for i, ln in enumerate(lines):
+        if ln.strip() != "":
+            continue
+        if i == 0 or i == len(lines) - 1:
+            continue  # leading/trailing handled above
+        if ctrl[i] > 0:
+            continue  # blank inside an if/for/func body is a legal separator
+        prev = lines[i - 1].rstrip()
+        nxt = lines[i + 1].rstrip()
+        prev_lead = prev.lstrip()
+        nxt_lead = nxt.lstrip()
+        if not prev_lead or not nxt_lead:
+            continue
+        # chain-call gaps: prev ends with '.' (Go), or next starts with '.'
+        # at an indent (Java/Rust/C++ builder chains) — ignore comment lines
+        if not prev_lead.startswith(('#', '//', '/*')):
+            if prev_lead not in ('...',) and prev.endswith('.'):
+                problems.append("chain-call-gap")
+                continue
+            if nxt.startswith((' ', '\t')) and nxt_lead.startswith('.'):
+                problems.append("chain-call-gap")
+                continue
+        # shell line-continuation gap
+        if prev.endswith('\\'):
+            problems.append("shell-continuation-gap")
+            continue
+        # comment-block gap (skip highlight marker boundaries, which are
+        # block separators rather than interior blank lines)
+        if (prev_lead.startswith('//') and nxt_lead.startswith('//')
+                and not re.search(r'//\s*highlight-(start|end)\s*$', prev)
+                and not re.search(r'//\s*highlight-(start|end)\s*$', nxt)):
+            problems.append("comment-block-gap")
+            continue
+        # sibling statement gap: two same-indent lines both ending with ';',
+        # neither a comment/import/assignment/block-closer, and the previous
+        # is not an object construction (`x = new Y();`)
+        prev_indent = len(prev) - len(prev.lstrip())
+        nxt_indent = len(nxt) - len(nxt.lstrip())
+        is_ctor = re.match(r'^\s*[A-Za-z_][\w.<>\[\],\s]*\s*=\s*new\s+[A-Za-z_]\w*\s*\(', prev)
+        if (prev.endswith(';') and nxt.endswith(';')
+                and prev_indent == nxt_indent
+                and not prev.rstrip().rstrip(';').endswith('}')
+                and not re.match(r'^\s*[}\)]', prev)
+                and "=" not in prev and "=" not in nxt
+                and not is_ctor
+                and not prev_lead.startswith(('//', '#', 'import ', 'use ', '#include ', 'from ', 'using '))
+                and not nxt_lead.startswith(('//', '#', 'import ', 'use ', '#include ', 'from ', 'using '))
+                and not CLOSE_ONLY.match(nxt)):
+            problems.append("stmt-gap")
+            continue
     return problems
 
 

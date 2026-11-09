@@ -9,13 +9,22 @@ creep into snippets, so the written block is clean and idiomatic. It removes:
   - blank lines between consecutive `import` / `use` / `#include` / `from`
     statements (single blank lines inside a Go `import ( ... )` block are kept —
     that is the stdlib/third-party group separator);
-  - blank lines inside data-structure literals (tracked by brace depth with a
-    collection-vs-block classifier: `{` after `=`, `:`, `(`, `[`, `,`, an
-    identifier, or on a line without a control keyword like `if`/`for`/`func`/
-    `main` is a collection opener; `{` on an `if`/`for`/`func`/`main`/... line
-    is a statement block whose interior blank lines are preserved);
+  - blank lines inside data-structure literals (tracked by paren/bracket/brace
+    depth with a collection-vs-block classifier: `(` and `[` always open a
+    literal/call region; `{` after `=`, `:`, `(`, `[`, `,`, an identifier, or
+    on a line without a control keyword like `if`/`for`/`func`/`main` is a
+    collection opener; `{` on an `if`/`for`/`func`/`main`/... line is a
+    statement block whose interior blank lines are preserved);
   - blank lines after a line ending with `,` and right before a closing
     `}` / `]` / `)` of a collection;
+  - blank lines inside chained method calls: a line ending with `.` (Go style
+    `x.New().` followed by an indented `WithField(...)`), or a line starting
+    with `.` at an indent (Java/Rust/C++ style `client` followed by
+    `    .method(...)`);
+  - blank lines after a shell line-continuation `\`;
+  - blank lines inside `//` comment blocks (both neighbours are comment lines);
+  - blank lines between two sibling statements at the same indent that both end
+    with `;` (consecutive calls such as C++ `schema.AddField(...);` blocks);
   - runs of 2+ consecutive blank lines (collapsed to a single blank line);
   - leading / trailing blank lines.
 
@@ -95,8 +104,9 @@ def normalize_go_import_blocks(lines):
 
 
 def collection_depth_per_line(lines):
-    """Return a list with, for each line, how many collection braces are open
-    at the start of the line. A `{` opens a collection unless it sits on a
+    """Return a list with, for each line, how many collection parens/brackets/
+    braces are open at the start of the line. `(` and `[` always count as
+    literal/call depth. A `{` opens a collection unless it sits on a
     control-flow line (`if`/`for`/`func`/`main`/...) AND is not preceded by a
     collection-forcing character."""
     depths = []
@@ -104,13 +114,33 @@ def collection_depth_per_line(lines):
     for line in lines:
         depths.append(depth)
         i = 0
+        quote = None
         while i < len(line):
             ch = line[i]
+            if quote:
+                if ch == '\\':
+                    i += 2
+                    continue
+                if ch == quote:
+                    quote = None
+                i += 1
+                continue
+            if ch in ('"', "'", '`'):
+                quote = ch
+                i += 1
+                continue
+            if ch == '#':  # line comment
+                break
             if ch == '{':
                 before = line[i - 1] if i > 0 else ' '
                 is_block = bool(CONTROL_RE.search(line)) and before not in COLLECT_BEFORE
                 if not is_block:
                     depth += 1
+            elif ch in ('(', '['):
+                depth += 1
+            elif ch in (')', ']'):
+                if depth > 0:
+                    depth -= 1
             elif ch == '}':
                 if depth > 0:
                     depth -= 1
@@ -160,8 +190,10 @@ def normalize(text):
             prev = lines[prev_nb_idx] if prev_nb_idx is not None else None
             nxt = lines[next_nb] if next_nb is not None else None
 
-            # inside a collection literal -> no blank lines
-            if coll_at[i] > 0:
+            # inside a collection literal -> no blank lines (except inside a Go
+            # `import ( ... )` block, whose inner blank is the stdlib/third-party
+            # group separator already reconstructed by normalize_go_import_blocks)
+            if coll_at[i] > 0 and not go_inside[i]:
                 continue
             # blank between imports (single blanks inside Go import blocks are
             # the reconstructed group separator — keep those)
@@ -182,6 +214,50 @@ def normalize(text):
             # idiomatic
             if nxt is not None and CLOSER_RE.match(nxt):
                 continue
+            # blank inside a chained method call:
+            #   - prev ends with `.` (Go style `x.New().` + indented `WithField`)
+            #   - next starts with `.` at an indent (Java/Rust/C++ style
+            #     `client` + indented `.method(...)`)
+            #   comment lines are ignored (a `# ... .` line is prose, not a call)
+            if prev is not None and not prev.strip().startswith(('#', '//', '/*')):
+                prev_s = prev.rstrip()
+                if prev_s.endswith('.') and not prev_s.strip().endswith(('...',)):
+                    continue
+            if nxt is not None:
+                nxt_s = nxt.lstrip()
+                if nxt_s.startswith('.') and nxt[:1] in (' ', '\t'):
+                    continue
+            # blank after a shell line-continuation backslash
+            if prev is not None and prev.rstrip().endswith('\\'):
+                continue
+            # blank inside a `//` comment block (both neighbours are comments,
+            # excluding highlight marker boundaries)
+            if prev is not None and nxt is not None:
+                if (prev.strip().startswith('//') and nxt.strip().startswith('//')
+                        and not re.search(r'//\s*highlight-(start|end)\s*$', prev)
+                        and not re.search(r'//\s*highlight-(start|end)\s*$', nxt)):
+                    continue
+            # blank between two sibling code statements at the same indent that
+            # both end with `;` (consecutive calls, e.g. C++ `schema.AddField()`
+            # lines) — drop, unless one of them is a comment/import/assignment,
+            # or the previous line closes a brace/block.
+            if prev is not None and nxt is not None:
+                prev_s = prev.rstrip()
+                nxt_s = nxt.rstrip()
+                prev_indent = len(prev) - len(prev.lstrip())
+                nxt_indent = len(nxt) - len(nxt.lstrip())
+                is_ctor = re.match(r'^\s*[A-Za-z_][\w.<>\[\],\s]*\s*=\s*new\s+[A-Za-z_]\w*\s*\(', prev_s)
+                if (prev_s.endswith(';') and nxt_s.endswith(';')
+                        and prev_indent == nxt_indent
+                        and not prev_s.rstrip(';').endswith('}')
+                        and not re.match(r'^\s*[}\)]', prev_s)
+                        and "=" not in prev_s and "=" not in nxt_s
+                        and not is_ctor
+                        and not prev_s.lstrip().startswith(('//', '#', 'import ', 'use ', '#include ', 'from ', 'using '))
+                        and not nxt_s.lstrip().startswith(('//', '#', 'import ', 'use ', '#include ', 'from ', 'using '))
+                        and not CLOSER_RE.match(nxt_s)
+                        and not prev_s.endswith(('{', '(', '['))):
+                    continue
             # collapse runs of 2+ blank lines
             if out and not out[-1].strip():
                 continue
