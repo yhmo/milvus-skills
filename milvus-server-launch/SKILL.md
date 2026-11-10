@@ -1,6 +1,6 @@
 ---
 name: milvus-server-launch
-description: Launch, stop, switch, and health-check a local Milvus standalone server via Docker Compose. Two variants are provided — a stable 2.6 release (milvusdb/milvus:v2.6.25) and a 3.0 release (milvusdb/milvus:v3.0.3) — each with its own docker-compose.yml and milvus.yaml. Use when the user asks to start/restart/stop a local Milvus server, switch between the 2.6 and 3.0 standalone deployments, check whether the local Milvus is healthy, or reset local Milvus data. Also use whenever another skill or workflow needs a live local Milvus standalone instance (e.g. real-run verification against localhost:19530).
+description: Launch, stop, switch, and health-check a local Milvus standalone server via Docker Compose. Two variants are provided — a stable 2.6 release (milvusdb/milvus:v2.6.25) and a 3.0 release (milvusdb/milvus:master-20261109-ab928c5a) — each with its own docker-compose.yml and milvus.yaml. Use when the user asks to start/restart/stop a local Milvus server, switch between the 2.6 and 3.0 standalone deployments, check whether the local Milvus is healthy, or reset local Milvus data. Also use whenever another skill or workflow needs a live local Milvus standalone instance (e.g. real-run verification against localhost:19530).
 ---
 
 # Launch Local Milvus Standalone Server
@@ -11,7 +11,7 @@ standalone) with its own `milvus.yaml` mounted into the container.
 ## Layout
 
 - `2.6/` — `milvusdb/milvus:v2.6.25`
-- `3.0/` — `milvusdb/milvus:v3.0.3`
+- `3.0/` — `milvusdb/milvus:master-20261109-ab928c5a`
 
 Both variants mount `<variant>/milvus.yaml` to `/milvus/configs/milvus.yaml`
 and persist data under `<variant>/volumes/`. That `volumes/` directory is
@@ -36,7 +36,7 @@ docker ps --filter name=milvus-
 ```
 
 A running `milvus-standalone` container is identified by its image tag
-(`milvusdb/milvus:v2.6.25` → `2.6` variant, `milvusdb/milvus:v3.0.3` → `3.0`
+(`milvusdb/milvus:v2.6.25` → `2.6` variant, `milvusdb/milvus:master-20261109-ab928c5a` → `3.0`
 variant). Then decide:
 
 | Running variant | Requested variant | Action |

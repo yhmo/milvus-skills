@@ -358,7 +358,10 @@ Updating a document WITHOUT the corresponding SDK skill risks API deviations
   are excluded from all SDK-related checks and fixes:
   - plain-text / pure-text blocks (marked `text` or containing prose only);
   - bash command lines that are ordinary shell/CLI usage (not a REST curl
-    block mirroring `/v2/vectordb/*` — REST curl blocks ARE covered);
+    block mirroring `/v2/vectordb/*` — REST curl blocks ARE covered). **Note:
+    regardless of coverage, no code block of any language may hardcode a
+    concrete IP/host endpoint — replace `http://<real-ip>:19530` style values
+    with `http://localhost:19530` (see Step 4 "Concrete IP addresses").**
   - YAML config blocks;
   - output examples (sample command output / results);
   - JSON blocks that represent pure data (request bodies, responses, examples);
@@ -722,7 +725,22 @@ Updating a document WITHOUT the corresponding SDK skill risks API deviations
         Milvus server (Step 5)** and the output was captured. Never write an
         output comment into another language unless it comes from a real run;
         without a real run, leaving the output comment out is the correct
-        behavior (do not invent or copy output values).
+         behavior (do not invent or copy output values).
+   - **Concrete IP addresses in code blocks — always replace with localhost.**
+     No snippet — Bash/REST, Python, Java, Go, Rust, C++, JavaScript, or any
+     other code block — may hardcode a concrete IP address or hostname of a
+     specific internal/private server (e.g. `http://10.100.32.69:19530`,
+     `http://192.168.x.x:19530`, or any non-placeholder
+     `http://<real-host>:19530`). Such values are environment-specific and make
+     the snippet fail for every reader outside that network. If a code block
+     contains a concrete IP/host endpoint, rewrite it to `http://localhost:19530`
+     (in the Feishu document itself — this is a content fix, not a harness
+     workaround). Scan every code block for the pattern
+     `http://<digits>.<digits>.<digits>.<digits>:19530` (and
+     `https://<real-host>/v2/...` non-placeholder hosts) when checking a
+     document, and report any hit. Placeholder endpoints like
+     `https://{cluster-id}.{region}.vectordb.zillizcloud.com:19530` are fine —
+     keep them; only concrete literal IPs/hosts are replaced.
    - **Block order check — every group must follow the canonical SDK order.**
      For every multi-SDK group (a `<synced-source>` container, or a run of
      sibling `<pre>` blocks in one section), the languages must appear in the
@@ -917,8 +935,11 @@ Updating a document WITHOUT the corresponding SDK skill risks API deviations
      block (the first client-using block); no later block contains a dependency
      statement;
    - sub-step numbering matches across SDKs in the same section;
-   - snippets are syntactically plausible (balanced braces/parens, no stray
-     placeholders unless intentional);
+    - snippets are syntactically plausible (balanced braces/parens, no stray
+      placeholders unless intentional);
+     - no code block of any language hardcodes a concrete IP/host endpoint
+       (`http://<real-ip>:19530` / `https://<real-host>`); all such values are
+       `http://localhost:19530` or valid placeholders (see Step 4);
    - any original `<include target="milvus">` /
      `<include target="zilliz">` markup inside code blocks is still present
      with the same targets and nested branches;
