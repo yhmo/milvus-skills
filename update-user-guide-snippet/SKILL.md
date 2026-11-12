@@ -792,27 +792,57 @@ Updating a document WITHOUT the corresponding SDK skill risks API deviations
        Milvus — **never change the document's placeholders**. Report this
        substitution in the summary. Never ask the user for real cloud
        credentials.
-     - **Consistency/visibility workarounds are harness-only — never touch the
-       document for them.** A snippet that inserts rows and later
-       searches/queries them can legitimately return no rows in a real run: the
-       query uses the default `consistency_level=Bounded`, so freshly inserted
-       rows are not yet visible, and the collection may not be loaded. **Never
-       "fix" the document for this**: do NOT add a `flush()` call or a
-       `load_collection()` call, and do NOT set `consistency_level=Strong` on
-       any search/query in a Feishu snippet. Those are run-harness concerns, not
-       snippet content — the document keeps its original flow unchanged. Instead
-       apply the workaround **only in the local verification copy** (same rule
-       as the localhost substitution):
-       rewrite each language's search/query block to set
-       `consistency_level=Strong` (per-SDK equivalent, e.g. pymilvus
-       `consistency_level="Strong"`, java `consistencyLevel(...)`, go
-       `WithConsistencyLevel(...)`, node `consistency_level: "Strong"`), adding
-       `load_collection()` before the first search/query only when the
-       collection must be loaded to be searchable, so the run actually returns
-       results. Report these substitutions in the summary. The bundled runners'
-       internal seed fixtures may call `flush()`/`load_collection()` to prepare
-       shared fixture collections — that is harness plumbing, distinct from
-       snippet content; never mirror it into document blocks.
+      - **Consistency/visibility workarounds are harness-only — never touch the
+        document for them.** A snippet that inserts rows and later
+        searches/queries them can legitimately return no rows in a real run: the
+        query uses the default `consistency_level=Bounded`, so freshly inserted
+        rows are not yet visible, and the collection may not be loaded. **Never
+        "fix" the document for this**: do NOT add a `flush()` call or a
+        `load_collection()` call, and do NOT set `consistency_level=Strong` on
+        any search/query in a Feishu snippet. Those are run-harness concerns, not
+        snippet content — the document keeps its original flow unchanged. Instead
+        apply the workaround **only in the local verification copy** (same rule
+        as the localhost substitution):
+        rewrite each language's search/query block to set
+        `consistency_level=Strong` (per-SDK equivalent, e.g. pymilvus
+        `consistency_level="Strong"`, java `consistencyLevel(...)`, go
+        `WithConsistencyLevel(...)`, node `consistency_level: "Strong"`), adding
+        `load_collection()` before the first search/query only when the
+        collection must be loaded to be searchable, so the run actually returns
+        results. Report these substitutions in the summary. The bundled runners'
+        internal seed fixtures may call `flush()`/`load_collection()` to prepare
+        shared fixture collections — that is harness plumbing, distinct from
+        snippet content; never mirror it into document blocks.
+       - **Each document is verified against its OWN isolated collection(s) —
+         never shared fixtures.** The verification harness assigns each document
+         a page-unique collection name (derived from the page file, e.g.
+         `gx_74_my_collection`) and rewrites every collection reference in the
+         document's blocks — and in any ad-hoc seed file — to that unique name.
+         The collection is seeded with the schema/dim the DOCUMENT actually
+         needs (index-specific constraints, field names, vector dimension
+         satisfying `dim % sub_dim == 0` / `dim % m == 0` for SCANN/PQ, etc.),
+         executed, then dropped after the run. This guarantees a page's schema,
+         dimension, or field-name requirements can never collide with (or be
+         polluted by) another page's run, and removes the "seed mismatch" class
+         of false failures (e.g. SCANN on a dim=5 fixture). Do NOT pre-seed a
+         known collection name and reuse it across pages; if a page defines its
+         own collection via `create_collection`, let the page create it under the
+         unique name instead of seeding it. The `run_page.py` runner implements
+         this isolation automatically; the extracted `<doc>.md` used by the other
+         SDK runners must apply the same page-unique name substitution so all
+         languages hit the same isolated collection.
+      - **Collection seeding is DATA-driven, not code-per-collection.** The
+        runner's `COLLECTION_SPECS` table in `run_page.py` describes every known
+        collection as data (fields/datatype/dim/index/rows/partitions), rendered
+        by one generic `_seed_from_spec()` engine. Adding support for a NEW
+        collection name is a DATA change (one spec entry) — never a new seed
+        function. A spec may set `dim_fn` to size the float vector per page's
+        index constraints, `index_use: "create"` (index included at
+        `create_collection`) vs `"doc"` (the doc builds its own index; the seed
+        must NOT pre-create one to avoid "multiple indexes on same field"), and
+        `functions` for BM25/sparse schemas. `your_collection_name` is a generic
+        placeholder: the runner selects the binary / sparse-BM25 / float schema
+        based on what the page actually indexes (see `_seed_for_collection`).
      - **Features that cannot be real-run (skip them, but still verify their
        API statically in Step 4).** These need external resources that cannot be
        simulated locally, so their code blocks are NOT executed; note the skip in
@@ -860,8 +890,9 @@ Updating a document WITHOUT the corresponding SDK skill risks API deviations
        bundled runners in `scripts/`:
 
       ```bash
-      # python (pymilvus) — logic baseline
-      python3 scripts/run_page.py <extracted.md> [seed.py ...]
+      # python (pymilvus) — logic baseline; each page auto-gets isolated
+      # collections (page-unique names) + its own schema, cleaned up after run
+      python3 scripts/run_page.py <extracted.md> [seed.py ...] [--keep <name>]
       # node
       node scripts/run_page_node.mjs <extracted.md>
       # go (needs client/v2 module; run from sdk-tmp/snippet-run/go)

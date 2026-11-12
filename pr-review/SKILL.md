@@ -577,11 +577,13 @@ For every candidate matched to a resolved, non-outdated thread, record `previous
   - `test/foo.cpp line:123`
     `Medium ---- ...`
   - `test/foo.cpp line:123`
-    `Low ---- ...`
+    `Low ---- ... (This comment is non-blocking. If you consider this issue not important, you can close this comment directly.)`
+- Every `Low` comment must end with the non-blocking parenthetical appended to the second line, exactly as shown above; `High` and `Medium` comments do not get it.
 - Before every POST or PATCH request, construct the final comment body as a dedicated string variable and inspect that exact string; never post draft reasoning prose or analysis notes directly.
 - Before every POST or PATCH request, do a literal preflight check on the exact body text:
   - line 1 must exactly match `path/to/file.ext line:123`
   - line 2 must start with `High ----`, `Medium ----`, or `Low ----`
+  - if line 2 starts with `Low ----`, it must also end with the non-blocking parenthetical `(This comment is non-blocking. If you consider this issue not important, you can close this comment directly.)`
   - if the body was copied or adapted from earlier analysis text, rewrite it into the required two-line review format before sending the request
   - if either required line-shape check fails, rewrite the body before sending the request
 - In Step 10 notes, record the exact final body text you intend to post so Step 11 can verify the posted comment against the same string rather than a paraphrase.
@@ -593,6 +595,7 @@ If a surviving finding cannot be anchored, explicitly handle it with the fallbac
 - Always post `High` findings
 - Post `Medium` findings
 - Post `Low` findings by default unless the user explicitly asks to ignore them. For example, skip low findings if user explicitly says "ignore minor issues" or "ignore low issues".
+- Every `Low` comment body must carry the non-blocking parenthetical at the end of its second line so the author can decide to close it without action.
 - Even when zero findings survive to this step, still execute Step 11 explicitly and record that no comments met the posting threshold.
 - Step 12 completion is mandatory before any final review response. Never stop after Step 9, Step 10, or Step 11 just because the surviving findings are already clear.
 - If there is at least one surviving finding entering Step 11, the workflow must continue through comment generation, inline posting, and post verification before the review is considered complete.
@@ -624,7 +627,7 @@ The posting mechanism stays the same; the required change is that the analysis w
 Use these labels consistently:
 - `High` — highly necessary to fix before merge.
 - `Medium` — better to fix; likely worthwhile and non-trivial
-- `Low` — minor issue; acceptable for the author to ignore
+- `Low` — minor issue; acceptable for the author to ignore. When posting a `Low` comment, append the non-blocking parenthetical `(This comment is non-blocking. If you consider this issue not important, you can close this comment directly.)` at the end of the second line.
 - Severity and merge disposition are related but not identical: severity describes how serious the issue is, while blocking vs non-blocking describes whether it must be fixed before this PR merges.
 - Decide merge disposition separately for each surviving finding: blocking, non-blocking, or follow-up.
 - Default guidance: `High` findings are blocking by default; `Medium` findings block when they affect correctness, compatibility, safety, or completion of the PR; `Low` findings are non-blocking by default unless the user explicitly asks to hold the bar higher.
@@ -635,8 +638,8 @@ Do not use numeric severity scores in posted comments unless the user explicitly
 
 Do not ask the user for confirmation. Post directly after validating:
 - Include file path and line number in the comment body on the first line, formatted exactly as: `path/to/file.ext line:123`
-- Put the severity-prefixed review text on the second line, for example: `Medium ---- ...`
-- Before every POST request, do a final body-shape check: line 1 must be the explicit `path ... line:...` text and line 2 must start with `High ----`, `Medium ----`, or `Low ----`; if not, fix the body before posting
+- Put the severity-prefixed review text on the second line, for example: `Medium ---- ...`; for `Low` comments, append the non-blocking parenthetical `(This comment is non-blocking. If you consider this issue not important, you can close this comment directly.)` at the end of that line
+- Before every POST request, do a final body-shape check: line 1 must be the explicit `path ... line:...` text and line 2 must start with `High ----`, `Medium ----`, or `Low ----`; if line 2 is `Low ----`, it must also end with the non-blocking parenthetical; if not, fix the body before posting
 - Exact comment text, including code suggestions
 - Always use Dedicated Inline Comment
 - Overall review message

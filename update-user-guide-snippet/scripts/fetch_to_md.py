@@ -17,6 +17,11 @@ Options:
   --doc NAME    label used only for the report (default: doc)
   --xml FILE    read fetch XML from a file instead of stdin
   --out PATH    output markdown path (required)
+  --isolate     rewrite every collection the page references to a page-unique
+                name (derived from --out basename), so ALL SDK runners hit the
+                same isolated collection per document (see the per-document
+                isolated-collection rule in SKILL.md Step 5). Implies the run
+                harness never shares fixtures across pages.
 """
 import argparse
 import html
@@ -51,11 +56,49 @@ def decode_block(raw: str) -> str:
     return html.unescape(text)
 
 
+# Collection names the harness knows as fixtures. Combined with collection names
+# the page itself creates (or placeholders it defines), these are rewritten to
+# page-unique names under --isolate so every SDK runner hits the same isolated
+# collection per document.
+KNOWN_COLLECTIONS = {
+    "quick_setup", "my_collection", "product_catalog", "iterator_collection",
+    "customer_profiles", "my_collection_1", "my_collection_2",
+}
+
+
+def _referenced_collections(*texts):
+    names = set()
+    for text in texts:
+        for m in re.finditer(r"[\"']([A-Za-z0-9_]{1,64})[\"']", text):
+            cand = m.group(1)
+            if cand in KNOWN_COLLECTIONS:
+                names.add(cand)
+        for m in re.finditer(
+                r"(?:collection_name|collectionName|collection)\s*[:=]\s*"
+                r"[\"']([^\"']+)[\"']", text):
+            names.add(m.group(1))
+    return names
+
+
+def _page_stem(out_path):
+    base = out_path.rsplit("/", 1)[-1]
+    stem = re.sub(r"\.md$", "", base)
+    return re.sub(r"[^A-Za-z0-9_]", "_", stem)
+
+
+def _rewrite_collections(text, mapping):
+    for orig, repl in sorted(mapping.items(), key=lambda kv: -len(kv[0])):
+        text = re.sub(rf"\b{re.escape(orig)}\b", repl, text)
+    return text
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--doc", default="doc", help="label for the report")
     ap.add_argument("--xml", help="file containing the fetch XML content")
     ap.add_argument("--out", required=True, help="output markdown path")
+    ap.add_argument("--isolate", action="store_true",
+                    help="rewrite collection names to page-unique isolated names")
     args = ap.parse_args()
 
     content = open(args.xml).read() if args.xml else sys.stdin.read()
@@ -75,17 +118,26 @@ def main():
         print(f"=== {args.doc}: no <pre> code blocks found (raw length {len(content)})")
         sys.exit(1)
 
+    # --isolate: map every collection the page touches to a page-unique name so
+    # all SDK runners hit the same isolated collection (never shared fixtures).
+    mapping = {}
+    decoded = [(lang_raw, normalize_lang(lang_raw), decode_block(body))
+               for lang_raw, body in blocks if lang_raw not in IGNORED]
+    if args.isolate:
+        refs = _referenced_collections(*(d for _, _, d in decoded))
+        stem = _page_stem(args.out)
+        mapping = {n: f"{stem}_{n}" for n in sorted(refs)}
+
     with open(args.out, "w") as f:
-        for i, (lang_raw, body) in enumerate(blocks):
-            if lang_raw in IGNORED:
-                continue
-            lang = normalize_lang(lang_raw)
-            code = decode_block(body)
+        for lang_raw, lang, code in decoded:
+            if args.isolate:
+                code = _rewrite_collections(code, mapping)
             f.write(f"```{lang}\n{code}\n```\n\n")
 
     written = [b for b in blocks if b[0] not in IGNORED]
+    iso_note = f" | isolated names: {sorted(mapping.values())}" if mapping else ""
     print(f"=== {args.doc}: wrote {len(written)} code blocks to {args.out} "
-          f"(ignored {len(blocks) - len(written)} Shell/zilliz CLI blocks) ===")
+          f"(ignored {len(blocks) - len(written)} Shell/zilliz CLI blocks){iso_note} ===")
     for i, (lang_raw, _) in enumerate(blocks):
         if lang_raw in IGNORED:
             print(f"  [{lang_raw}] block {i}: ignored (zilliz CLI)")
