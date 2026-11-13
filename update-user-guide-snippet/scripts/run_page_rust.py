@@ -24,11 +24,16 @@ import shutil
 import re
 import subprocess
 import sys
+import tempfile
 import urllib.request
 
 REPO = os.path.dirname(os.path.dirname(os.path.dirname(os.path.realpath(__file__))))
 PROJ = os.path.join(REPO, "sdk-tmp", "snippet-run", "rust")
 SRC = os.path.join(PROJ, "src")
+# Run the snippet process from a scratch dir under /tmp so any relative-path
+# outputs it writes (BulkWriter files, results.json, ...) never land in the
+# skill's scripts/ directory.
+WORK = os.path.join(tempfile.gettempdir(), "milvus-snippet-run", "rust")
 
 
 def latest_version():
@@ -147,14 +152,15 @@ def main():
         f.write(prog)
 
     print(f"rust blocks: {len(blocks)} | verifying milvus-sdk-rust {ver} (crates.io)")
+    os.makedirs(WORK, exist_ok=True)
     r = subprocess.run(["cargo", "fetch", "--manifest-path", os.path.join(PROJ, "Cargo.toml")],
-                       capture_output=True, text=True)
+                       capture_output=True, text=True, cwd=WORK)
     if r.returncode != 0:
         sys.stderr.write(r.stderr[-2000:])
         print("\nrust: crate fetch failed (network) — snippets NOT executed")
         sys.exit(1)
     r = subprocess.run(["cargo", "run", "--quiet", "--manifest-path", os.path.join(PROJ, "Cargo.toml")],
-                       capture_output=True, text=True)
+                       capture_output=True, text=True, cwd=WORK)
     sys.stdout.write(r.stdout)
     sys.stderr.write(r.stderr[-3000:] if r.returncode else "")
     print(f"\n=== {page} === rust run {'OK' if r.returncode == 0 else 'FAILED'} ({len(blocks)} blocks)")

@@ -30,10 +30,15 @@ import re
 import shutil
 import subprocess
 import sys
+import tempfile
 import urllib.request
 
 REPO = os.path.dirname(os.path.dirname(os.path.dirname(os.path.realpath(__file__))))
 PROJ = os.path.join(REPO, "sdk-tmp", "snippet-run", "cpp")
+# Run the snippet process from a scratch dir under /tmp so any relative-path
+# outputs it writes (BulkWriter files, results.json, ...) never land in the
+# skill's scripts/ directory.
+WORK = os.path.join(tempfile.gettempdir(), "milvus-snippet-run", "cpp")
 DEPLOY = os.path.join(PROJ, "deploy")       # conan full_deploy output
 GH_DEPLOY = os.path.join(PROJ, "gh-deploy")  # github release extraction output
 REMOTE = "default-conan-local2"
@@ -507,7 +512,8 @@ def main():
     # make the shared library findable at run time (so for unix, dylib for macOS)
     for var in ("LD_LIBRARY_PATH", "DYLD_LIBRARY_PATH"):
         env[var] = lib + (os.pathsep + env[var] if env.get(var) else "")
-    r = subprocess.run([out], capture_output=True, text=True, env=env)
+    os.makedirs(WORK, exist_ok=True)
+    r = subprocess.run([out], capture_output=True, text=True, env=env, cwd=WORK)
     sys.stdout.write(r.stdout)
     sys.stderr.write(r.stderr[-3000:] if r.returncode else "")
     print(f"\n=== {page} === cpp run {'OK' if r.returncode == 0 else 'FAILED'} ({len(blocks)} blocks)")

@@ -135,8 +135,12 @@ LARKSUITE_CLI_NO_UPDATE_NOTIFIER=1 LARKSUITE_CLI_NO_SKILLS_NOTIFIER=1 \
 - Interpret that auth output before publishing:
   - The required state is an available user identity (`identities.user.available == true`) with a usable token. Continue without prompting for authorization when this is true.
   - If the user identity is missing/expired (for example `tokenStatus == "expired"` or the status says the refresh token expired), this is an **authentication-session expiry**, not a missing wiki permission. Tell the user that Feishu user authorization expired and needs to be refreshed.
-  - For that expired/missing session, use the `lark-shared` split-flow once and request the whole weekly-report workflow scope set: `auth login --domain wiki --domain docs --domain drive --domain contact --no-wait --json`. Do not initiate scope-only reauthorization.
-  - Only call `auth login --scope <scope>` for a real user-identity `missing_scope`/authorization error returned by an API call while a usable user token exists. A `token_missing`/expired-token error must be handled as session reauthorization, even if its hint names scopes such as `wiki:node:retrieve`.
+  - For that expired/missing session, use the `lark-shared` split-flow once and request the **minimal** weekly-report workflow scope set — these are the only scopes the workflow uses, so no admin review is triggered:
+    ```bash
+    lark-cli auth login --scope "search:docs:read wiki:node:retrieve wiki:node:create docx:document:readonly docx:document:write_only contact:user.basic_profile:readonly" --no-wait --json
+    ```
+    The only write scopes are `wiki:node:create` (auto-creating the date/personal pages) and `docx:document:write_only` (overwriting the report); everything else is read-only. Do **NOT** request whole business domains (`--domain wiki --domain docs --domain drive --domain contact`): each domain pulls in unrelated scopes (e.g. `wiki:member:*`, `docs:permission.member:*`, `drive:file:upload`) that this workflow never uses and that can require admin approval.
+  - Only call `auth login --scope <scope>` additionally for a real user-identity `missing_scope`/authorization error returned by an API call while a usable user token exists; follow the scopes listed in the error. A `token_missing`/expired-token error must be handled as session reauthorization with the full minimal scope set above, even if its hint names scopes such as `wiki:node:retrieve`.
   - Do not use `auth check` as the first preflight when no user token exists: it can report scopes as "missing" even though the actual problem is that there is no usable token.
 - Always use `--as user` for wiki and doc operations (wiki pages are user resources; the bot identity lacks the required scopes).
 

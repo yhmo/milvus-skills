@@ -12,12 +12,17 @@ import re
 import shutil
 import subprocess
 import sys
+import tempfile
 from pathlib import Path
 
 TAG = sys.argv[2] if len(sys.argv) > 2 else "v3.0.0"
 PAGE = sys.argv[1]
 REPO = Path(__file__).resolve().parents[2]
 PROJ = REPO / "sdk-tmp" / "snippet-run" / "csharp"
+# Run the snippet process from a scratch dir under /tmp so any relative-path
+# outputs it writes (BulkWriter files, results.json, ...) never land in the
+# skill's scripts/ directory.
+WORK = Path(tempfile.gettempdir()) / "milvus-snippet-run" / "csharp"
 
 
 def depth(line: str) -> int:
@@ -163,10 +168,12 @@ def main() -> int:
         shutil.rmtree(PROJ / item, ignore_errors=True)
 
     print(f"csharp blocks: {len(blocks)} | Milvus.Client.V2 {TAG}")
+    WORK.mkdir(parents=True, exist_ok=True)
     result = subprocess.run(
         ["dotnet", "run", "--project", str(PROJ)],
         text=True,
         capture_output=True,
+        cwd=WORK,
     )
     sys.stdout.write(result.stdout)
     if result.returncode:

@@ -272,6 +272,57 @@ COLLECTION_SPECS = {
             for i in range(5)
         ],
     },
+    # Count Entities doc: `test_collection` holds 20 rows so count(*) == 20.
+    "test_collection": {
+        "fields": [
+            ("id", "INT64", {"is_primary": True}),
+            ("vector", "FLOAT_VECTOR", {"dim": 5}),
+            ("color", "VARCHAR", {"max_length": 512}),
+        ],
+        "index": {"field_name": "vector", "index_type": "AUTOINDEX", "metric_type": "L2"},
+        "index_use": "create",
+        "rows": lambda client, DataType, name, dim: [
+            {"id": i, "vector": [0.1 * (i % 5), 0.2, 0.3, 0.4, 0.5], "color": "c" + str(i % 4)}
+            for i in range(20)
+        ],
+    },
+    # Force Merge Compaction doc: compacts `target_collection`.
+    "target_collection": {
+        "fields": [
+            ("id", "INT64", {"is_primary": True}),
+            ("vector", "FLOAT_VECTOR", {"dim": 5}),
+        ],
+        "index": {"field_name": "vector", "index_type": "FLAT", "metric_type": "L2"},
+        "index_use": "create",
+        "rows": lambda client, DataType, name, dim: [
+            {"id": i, "vector": [0.1, 0.2, 0.3, 0.4, 0.5]} for i in range(100)
+        ],
+    },
+    # Tune Index Build Level doc: `customized_setup` — doc builds the index itself.
+    "customized_setup": {
+        "fields": [
+            ("id", "INT64", {"is_primary": True}),
+            ("vector", "FLOAT_VECTOR", {"dim": 8}),
+        ],
+        "index_use": "doc",
+        "rows": lambda client, DataType, name, dim: [
+            {"id": i, "vector": [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8]} for i in range(20)
+        ],
+    },
+    # Use Large TopK doc: `scenarios_corpus` — page builds its own index (dim 4).
+    "scenarios_corpus": {
+        "fields": [
+            ("id", "INT64", {"is_primary": True}),
+            ("scenario_id", "VARCHAR", {"max_length": 64}),
+            ("title", "VARCHAR", {"max_length": 128}),
+            ("vector", "FLOAT_VECTOR", {"dim": 4}),
+        ],
+        "index_use": "doc",
+        "rows": lambda client, DataType, name, dim: [
+            {"id": i, "scenario_id": "s%d" % i, "title": "scenario %d" % i,
+             "vector": [0.1, 0.2, 0.3, 0.4]} for i in range(20)
+        ],
+    },
     # placeholder collection used by the index docs (FLAT/IVF_*/HNSW/SCANN/GPU_*).    # NO index pre-created: the doc's own Build index block calls create_index()
     # on this field, so an AUTOINDEX here would collide.
     "your_collection_name": {
@@ -410,6 +461,7 @@ def _seed_tech_articles(client, DataType, name, md=""):
     chunk_schema.add_field("has_code", DataType.BOOL)
     chunk_schema.add_field("emb_list_vector", DataType.FLOAT_VECTOR, dim=4)
     chunk_schema.add_field("emb", DataType.FLOAT_VECTOR, dim=4)
+    chunk_schema.add_field("code_emb", DataType.FLOAT_VECTOR, dim=4)
     s.add_field("chunks", DataType.ARRAY, element_type=DataType.STRUCT,
                 struct_schema=chunk_schema, max_capacity=1000, nullable=True)
     ix = client.prepare_index_params()
@@ -418,13 +470,16 @@ def _seed_tech_articles(client, DataType, name, md=""):
     # sub-field vector indexes present; the Index page creates them itself, so
     # do NOT pre-create them there (multiple indexes on the same field rejected).
     page_creates_chunk_index = bool(re.search(
-        r"create_index[\s\S]*?chunks\[(?:emb_list_vector|emb)\]", md))
+        r"create_index[\s\S]*?chunks\[(?:emb_list_vector|emb|code_emb)\]", md))
     if not page_creates_chunk_index:
         ix.add_index(field_name="chunks[emb_list_vector]", index_type="HNSW",
                      metric_type="MAX_SIM_COSINE", index_name="chunks_emb_list_max_sim",
                      params={"M": 16, "efConstruction": 200})
         ix.add_index(field_name="chunks[emb]", index_type="HNSW",
                      metric_type="COSINE", index_name="chunks_emb_cosine",
+                     params={"M": 16, "efConstruction": 200})
+        ix.add_index(field_name="chunks[code_emb]", index_type="HNSW",
+                     metric_type="COSINE", index_name="chunks_code_emb",
                      params={"M": 16, "efConstruction": 200})
     client.create_collection(name, schema=s, index_params=ix)
     rows = [
@@ -434,11 +489,13 @@ def _seed_tech_articles(client, DataType, name, md=""):
              {"text": "Create one index for each vector subfield.", "section": "index",
               "page": 1, "quality_score": 0.96, "has_code": False,
               "emb_list_vector": [0.10, 0.20, 0.30, 0.40],
-              "emb": [0.10, 0.20, 0.30, 0.40]},
+              "emb": [0.10, 0.20, 0.30, 0.40],
+              "code_emb": [0.11, 0.21, 0.31, 0.41]},
              {"text": "Use MAX_SIM metrics for EmbeddingList search.", "section": "index",
               "page": 2, "quality_score": 0.91, "has_code": True,
               "emb_list_vector": [0.16, 0.24, 0.35, 0.45],
-              "emb": [0.16, 0.24, 0.35, 0.45]},
+              "emb": [0.16, 0.24, 0.35, 0.45],
+              "code_emb": [0.17, 0.25, 0.34, 0.44]},
          ]},
         {"doc_id": 2, "title": "Filtered StructArray search", "category": "filter",
          "title_vector": [0.20, 0.18, 0.22, 0.40],
@@ -446,11 +503,13 @@ def _seed_tech_articles(client, DataType, name, md=""):
              {"text": "Use element_filter to match scalar conditions within the same Struct element.",
               "section": "filter", "page": 1, "quality_score": 0.93, "has_code": True,
               "emb_list_vector": [0.21, 0.18, 0.33, 0.44],
-              "emb": [0.21, 0.18, 0.33, 0.44]},
+              "emb": [0.21, 0.18, 0.33, 0.44],
+              "code_emb": [0.22, 0.19, 0.32, 0.43]},
              {"text": "MATCH_LEAST checks how many elements satisfy a predicate.",
               "section": "filter", "page": 2, "quality_score": 0.88, "has_code": False,
               "emb_list_vector": [0.24, 0.22, 0.31, 0.39],
-              "emb": [0.24, 0.22, 0.31, 0.39]},
+              "emb": [0.24, 0.22, 0.31, 0.39],
+              "code_emb": [0.25, 0.23, 0.30, 0.38]},
          ]},
         {"doc_id": 3, "title": "Element-level search with offsets", "category": "search",
          "title_vector": [0.33, 0.11, 0.29, 0.37],
@@ -458,7 +517,8 @@ def _seed_tech_articles(client, DataType, name, md=""):
              {"text": "Element-level search can return the offset of the matched Struct element.",
               "section": "search", "page": 1, "quality_score": 0.95, "has_code": False,
               "emb_list_vector": [0.32, 0.14, 0.28, 0.41],
-              "emb": [0.32, 0.14, 0.28, 0.41]},
+              "emb": [0.32, 0.14, 0.28, 0.41],
+              "code_emb": [0.33, 0.15, 0.27, 0.40]},
          ]},
     ]
     client.insert(name, rows)
@@ -846,6 +906,33 @@ def _rewrite(text, mapping):
     return text
 
 
+def _strip_python_imports(block, out):
+    """Remove `from X import ...` / `import X` statements from a python block,
+    appending each to `out` (caller dedupes). Handles single-line imports and
+    multi-line parenthesized `from X import (...)` groups."""
+    lines = block.split("\n")
+    kept = []
+    i = 0
+    while i < len(lines):
+        line = lines[i]
+        s = line.strip()
+        if s.startswith("from ") or s.startswith("import "):
+            stmt = [line]
+            depth = s.count("(") - s.count(")")
+            j = i + 1
+            while depth > 0 and j < len(lines):
+                nxt = lines[j]
+                stmt.append(nxt)
+                depth += nxt.count("(") - nxt.count(")")
+                j += 1
+            out.append("\n".join(stmt).strip())
+            i = j
+            continue
+        kept.append(line)
+        i += 1
+    return "\n".join(kept)
+
+
 def main():
     argv = []
     keep_extra = []
@@ -879,7 +966,21 @@ def main():
         if m:
             client_var = m.group(1)
             break
-    prelude = 'from pymilvus import MilvusClient, DataType\n'
+    # Hoist every `from X import ...` / `import X` statement out of the python
+    # blocks into the prelude (mirrors run_page_java.py). The doc blocks follow
+    # the dependency-hoisting convention: ALL imports live in the first
+    # client-using block, which may come AFTER an earlier helper/definition
+    # block (e.g. a ranker Function builder) that already references those
+    # names. Executing blocks strictly in document order would raise NameError
+    # there; collecting the imports first and running them in the prelude makes
+    # the assembled program equivalent to the Java model where imports are
+    # hoisted to the top of the file.
+    hoisted = []
+    blocks = [_strip_python_imports(b, hoisted) for b in blocks]
+    # dedupe imports, preserving first-occurrence order
+    hoisted = list(dict.fromkeys(hoisted))
+    prelude = ("\n".join(hoisted) + "\n") if hoisted else ""
+    prelude += 'from pymilvus import MilvusClient, DataType\n'
     prelude += f'{client_var} = MilvusClient(uri="{URI}", token="{TOKEN}")\n'
 
     env = {"__name__": "__main__"}

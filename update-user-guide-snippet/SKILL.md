@@ -906,6 +906,14 @@ Updating a document WITHOUT the corresponding SDK skill risks API deviations
       python3 scripts/run_page_cpp.py <extracted.md> [<version>] [--api-index sdk-tmp/api-index --sdk-tag cpp@v3.0.3]
       ```
 
+      The java/rust/cpp/csharp runners execute the snippet process from a scratch
+      working directory `$TMPDIR/milvus-snippet-run/<lang>` (never from
+      `scripts/`), so any relative-path outputs a snippet writes — BulkWriter
+      parquet files, `results.json`, downloaded files, etc. — land in `/tmp`
+      instead of polluting the skill's `scripts/` directory. The python and node
+      runners execute in-process and likewise must not write snippet outputs into
+      the repo (see the harness-copy rule).
+
       **API-index integration.** Pass `--api-index <dir> --sdk-tag sdk@tag` to a
       runner to (a) pin the SDK dependency version to TAG (java/rust/go/cpp —
       skipping the network registry lookup) and (b) print a soft pre-compile

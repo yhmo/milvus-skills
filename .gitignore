@@ -17,6 +17,12 @@ target/
 # Generated temp files
 json-field-pages.md
 
+# Snippet-runner scratch outputs that land in the repo root/scripts via relative
+# paths (BulkWriter parquet dirs, results.json) — legacy guard; runners now
+# write to $TMPDIR/milvus-snippet-run/<lang> instead
+update-user-guide-snippet/results.json
+update-user-guide-snippet/scripts/bulk_writer/
+
 # Milvus server runtime data (docker compose bind mounts, created on startup)
 milvus-server-launch/*/volumes/
 

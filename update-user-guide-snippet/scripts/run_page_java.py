@@ -18,11 +18,16 @@ import shutil
 import re
 import subprocess
 import sys
+import tempfile
 import urllib.request
 
 REPO = os.path.dirname(os.path.dirname(os.path.dirname(os.path.realpath(__file__))))
 PROJ = os.path.join(REPO, "sdk-tmp", "snippet-run", "java")
 SRC = os.path.join(PROJ, "src", "main", "java")
+# Run the snippet process from a scratch dir under /tmp so any relative-path
+# outputs it writes (BulkWriter parquet files, results.json, ...) never land in
+# the skill's scripts/ directory.
+WORK = os.path.join(tempfile.gettempdir(), "milvus-snippet-run", "java")
 
 
 def latest_version():
@@ -175,10 +180,11 @@ def main():
         f.write(pom(ver))
 
     print(f"java blocks: {len(blocks)} | verifying milvus-sdk-java {ver} (Maven Central)")
+    os.makedirs(WORK, exist_ok=True)
     r = subprocess.run(
         ["mvn", "-q", "-f", os.path.join(PROJ, "pom.xml"), "compile", "exec:java",
          "-Dexec.mainClass=RunPage"],
-        capture_output=True, text=True)
+        capture_output=True, text=True, cwd=WORK)
     sys.stdout.write(r.stdout)
     sys.stderr.write(r.stderr[-3000:] if r.returncode else "")
     print(f"\n=== {page} === java run {'OK' if r.returncode == 0 else 'FAILED'} ({len(blocks)} blocks)")
