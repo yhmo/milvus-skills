@@ -646,6 +646,10 @@ dataCoord:
     # Switch value to control if to enable automatic segment compaction during which data coord locates and merges compactable segments in the background.
     # This configuration takes effect only when dataCoord.enableCompaction is set as true.
     enableAutoCompaction: true
+    # Whether to enable schema version bump on compaction so that newly added
+    # function-backed fields can be backfilled into existing sealed segments.
+    bumpSchemaVersion:
+      enabled: true
     indexBasedCompaction: true
     # compaction task prioritizer, options: [default, level, mix].
     # default is FIFO.
@@ -937,7 +941,7 @@ common:
   # In this case, the maximum concurrency of disk write operations is determined by the caller's thread pool size.
   diskWriteNumThreads: 0
   security:
-    authorizationEnabled: false
+    authorizationEnabled: true
     # The superusers will ignore some system check processes,
     # like the old password verification when updating the credential
     superUsers: 
