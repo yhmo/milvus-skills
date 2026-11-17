@@ -51,6 +51,16 @@ Work from repository evidence. Treat this skill as a workflow and navigation lay
 
 Run `scripts/repo-context.sh` when a quick current-checkout snapshot would help. Execute it from any directory inside the Milvus checkout.
 
+When the user wants to run the locally built server, follow the step-by-step
+procedure in [references/build-and-test.md](references/build-and-test.md) →
+"Run the built binary as a standalone server (embedded etcd + local storage)".
+It covers the `make milvus` prerequisite, the `embedEtcd.yaml`, the env vars
+(`DEPLOY_MODE=STANDALONE` is required, `ETCD_USE_EMBED`, `COMMON_STORAGETYPE=local`,
+`LD_LIBRARY_PATH=.../internal/core/output/lib/`), the `--run-with-subprocess`
+flag, the health check on `:9091`, and the pitfalls (missing embedEtcd.yaml,
+stale `/tmp/milvus` data dirs, a Docker `milvus-standalone` squatting on the
+ports).
+
 ## Investigate before acting
 
 1. Find symbols and files with `rg` or `rg --files`; do not infer current paths from this skill.

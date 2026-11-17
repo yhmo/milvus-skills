@@ -67,6 +67,67 @@ scripts/standalone_embed.sh
 scripts/stop_graceful.sh
 ```
 
+### Run the built binary as a standalone server (embedded etcd + local storage)
+
+The repo scripts either need external services (`start_standalone.sh` assumes
+etcd/MinIO/message-queue are up) or Docker (`standalone_embed.sh`). To run the
+**locally built** `bin/milvus` with no external dependencies, in the repo root:
+
+1. Build: `make milvus` (build-cpp + build-go). The C++ core `.so` libraries
+   land in `internal/core/output/lib/`.
+2. Create the embedded-etcd config, e.g. `embedEtcd.yaml`:
+
+   ```yaml
+   listen-client-urls: http://0.0.0.0:2379
+   advertise-client-urls: http://0.0.0.0:2379
+   quota-backend-bytes: 4294967296
+   auto-compaction-mode: revision
+   auto-compaction-retention: '1000'
+   ```
+
+3. Start with these env vars and flags:
+
+   ```bash
+   DEPLOY_MODE=STANDALONE \
+   ETCD_USE_EMBED=true \
+   ETCD_CONFIG_PATH=/tmp/milvus/embedEtcd.yaml \
+   ETCD_DATA_DIR=/tmp/milvus/etcd \
+   COMMON_STORAGETYPE=local \
+   LD_LIBRARY_PATH=$PWD/internal/core/output/lib/ \
+   ./bin/milvus run standalone --run-with-subprocess
+   ```
+
+   (nohup + `> /tmp/milvus-standalone.log 2>&1 &` to run in the background.)
+
+4. Verify: `curl http://localhost:9091/healthz` returns `OK`; gRPC is on
+   `:19530`.
+5. Stop: kill the `milvus run standalone` processes, or `scripts/stop_graceful.sh`.
+
+Key env/flag rationale:
+
+- `DEPLOY_MODE=STANDALONE` — **required**: embedded etcd panics under any other
+  deploy mode (`pkg/util/paramtable/service_param.go`).
+- `ETCD_USE_EMBED=true` + `ETCD_CONFIG_PATH` + `ETCD_DATA_DIR` — in-process etcd
+  on `:2379` instead of an external etcd.
+- `COMMON_STORAGETYPE=local` — local disk instead of MinIO/S3; data lives under
+  `configs/milvus.yaml` → `common.storageType: local` → `localStorage.path`.
+- `LD_LIBRARY_PATH=$PWD/internal/core/output/lib/` — the C++ core libraries the
+  binary needs.
+- `--run-with-subprocess` — same as `scripts/start_standalone.sh`.
+
+Pitfalls observed in practice:
+
+- The `ETCD_CONFIG_PATH` file must exist; the server panics at startup if it is
+  missing.
+- Clean stale state before (re)starting: remove the etcd data dir, the local
+  storage data dir, and the rocksmq data dirs (e.g. `/tmp/milvus/etcd`,
+  `/tmp/milvus/data`, `/tmp/milvus/rdb_data*`) so no stale meta carries over.
+- A Docker `milvus-standalone` (a release image that does **not** contain
+  in-development feature branches) can occupy `:19530`/`:9091` and silently
+  serve a different build — stop it first
+  (`docker stop milvus-standalone milvus-etcd milvus-minio`) so the local build
+  owns the ports.
+
 Integration tests and local deployments can start containers, consume significant resources, or mutate local data. Run them only when authorized and relevant. Prefer bounded, targeted suites or fault injection for behavioral verification.
 
 ## Generated artifacts
