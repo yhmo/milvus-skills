@@ -213,6 +213,7 @@ woodpecker:
   storage:
     type: minio # The Type of the storage provider. Valid values: [minio, local]
     rootPath: /var/lib/milvus/woodpecker # The root path of the storage provider.
+    useLoonFFI: true # Whether to use the Loon FFI to access object storage. Valid values: [true, false]
 
 # Related configuration of pulsar, used to manage Milvus logs of recent mutation operations, output streaming log, and provide log publish-subscribe services.
 pulsar:
