@@ -87,6 +87,7 @@ language SDK except when comparing behavior.
 - Ask before starting Docker/system tests, running examples that mutate Milvus, installing outside the repository,
   publishing packages, pushing tags, or changing remote release state.
 - Do not invent a benchmark workflow; this repository currently has none.
+- Do not modify `CHANGELOG.md` unless preparing a release; only rewrite this file in a release-preparation PR.
 - When committing, use `git commit -sm 'message'` so the committer's email address is recorded; every commit in this repository must carry a Signed-off-by trailer.
 - When creating a pull request, ensure each PR contains exactly one commit.
 

@@ -213,7 +213,7 @@ When preparing or analyzing a release:
 4. Bump the SDK version across the versioned files: the root `Cargo.toml` version, every `tutorial/*/Cargo.toml` exact `milvus-sdk-rust = "=X.Y.Z"` dependency, and every tutorial README version reference. Then `git status --short` and confirm only intended version files changed.
 5. Use `scripts/run_tutorials.sh` to launch the standalone Milvus test server and validate tutorials after the published crate is available.
 6. Derive changelog entries from implementation commits since the preceding release, not only version-bump or `Prepare for vX.Y.Z` marker commits.
-7. Keep ordinary feature and bug-fix work out of `CHANGELOG.md` unless the user explicitly asks for release preparation or a changelog update.
+7. Do not modify `CHANGELOG.md` unless preparing a release; only rewrite this file in a release-preparation PR.
 8. Do not publish, tag, push, or modify remote release state without explicit authorization.
 
 ## Generated code and safety

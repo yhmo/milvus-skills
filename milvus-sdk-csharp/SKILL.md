@@ -93,7 +93,7 @@ For architecture or implementation work, normally read both `technical-details.m
 - **V2 (`MilvusClientV2`) is strongly recommended for new work.** V2 is the active, released API. V1 (`MilvusClient`/`MilvusCollection`) is in maintenance mode: it is retained for compatibility only, should receive only requested maintenance or critical fixes, and is **not recommended** for new projects or new code.
 - Preserve multi-targeting (`net8.0;netstandard2.0;net462`). Guard net8.0-only APIs (for example `Half` in FP16/BF16 paths) with `#if NET8_0_OR_GREATER`.
 - New source files should follow the repository's style and analyzers; `TreatWarningsAsErrors` and `AnalysisLevel=latest` are enabled at the directory level.
-- Do not update `CHANGELOG.md` for ordinary feature or bug-fix work unless the user requests release preparation.
+- Do not modify `CHANGELOG.md` unless preparing a release; only rewrite this file in a release-preparation PR.
 
 ## Release window analysis
 

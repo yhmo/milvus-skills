@@ -75,7 +75,7 @@ For architecture or implementation work, normally read both `technical-details.m
 - Keep the public surface free of raw `@grpc/grpc-js` types except where already exposed (e.g. `ChannelOptions`).
 - Check results against `ErrorCode.SUCCESS` and throw `Error` with `reason`/`ERROR_REASONS` when validation fails, matching existing style.
 - New source files follow the repository style: 2-space indent, single quotes, semicolons, ES5 trailing commas, strict TypeScript (`strict: true`). Run prettier on changed files.
-- Do not update package version, changelog docs, or release metadata for ordinary feature/bug-fix work unless the user requests release preparation.
+- Do not modify `CHANGELOG.md` unless preparing a release; only rewrite this file in a release-preparation PR.
 
 ## Conventions for committing and PRs
 

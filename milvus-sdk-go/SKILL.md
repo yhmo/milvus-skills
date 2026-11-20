@@ -76,6 +76,7 @@ language SDK or for server-side `internal/` packages.
 - Do not hand-edit generated files: `milvusclient/mock_milvus_server_test.go` is regenerated with `make generate-mockery-client`;
   protobuf bindings come from `milvus-proto/go-api/v3` and are bumped with `scripts/update-api-version.sh` (see build-and-test.md).
 - Keep changes minimal and branch-consistent. Do not mix feature implementation with release metadata.
+- Do not modify `CHANGELOG.md` unless preparing a release; only rewrite this file in a release-preparation PR.
 - When committing, use `git commit -sm 'message'` so the committer's email address is recorded; every commit in this repository must carry a Signed-off-by trailer.
 - When creating a pull request, ensure each PR contains exactly one commit.
 

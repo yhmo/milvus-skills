@@ -75,6 +75,7 @@ scripts/validate-skill.sh "$(pwd)"
 - Prefer targeted tests before full repo tests.
 - Ask before running examples or benchmarks that require a Milvus server, external credentials, large data, or destructive cleanup.
 - Never publish packages, push tags, create releases, or modify remote release state without explicit confirmation.
+- Do not modify `CHANGELOG.md` unless preparing a release; only rewrite this file in a release-preparation PR.
 - When committing, use `git commit -sm 'message'` so the committer's email address is recorded; every commit in this repository must carry a Signed-off-by trailer.
 - When creating a pull request, ensure each PR contains exactly one commit.
 

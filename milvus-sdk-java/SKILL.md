@@ -95,7 +95,7 @@ Before applying architecture, API, or test-layout knowledge, run `git branch --s
 - Preserve Java 8 source/target compatibility unless the branch explicitly changes it.
 - For a class named `XXX`, name its builder `XXXBuilder`.
 - New Java files require the Apache 2.0 license header.
-- Do not update `CHANGELOG.md` for ordinary feature or bug-fix work unless the user requests release preparation.
+- Do not modify `CHANGELOG.md` unless preparing a release; only rewrite this file in a release-preparation PR.
 - When committing, use `git commit -sm 'message'` so the committer's email address is recorded; every commit in this repository must carry a Signed-off-by trailer.
 - When creating a pull request, ensure each PR contains exactly one commit.
 
